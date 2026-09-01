@@ -1,91 +1,29 @@
-let cruds = [];
-let databaseAvailable = false;
-
-const list = document.querySelector('#crudList');
-const status = document.querySelector('#databaseStatus');
+let cruds = [], activeCrud = null, databaseAvailable = false;
+const list = document.querySelector('#crudList'), status = document.querySelector('#databaseStatus');
 const format = new Intl.NumberFormat('pt-BR');
+const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[c]);
+const request = async (path, options = {}) => { const response = await fetch(`api.php/${path}`, options); const payload = response.status === 204 ? {} : await response.json(); if (!response.ok) throw new Error(payload.error || 'Erro na operação.'); return payload; };
 
-function escapeHtml(value) {
-  return String(value).replace(/[&<>'"]/g, character => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
-  })[character]);
-}
+function updateStats() { document.querySelector('#crudCount').textContent = format.format(cruds.length); document.querySelector('#recordCount').textContent = format.format(cruds.reduce((n, c) => n + Number(c.records), 0)); document.querySelector('#columnCount').textContent = format.format(cruds.reduce((n, c) => n + Number(c.columns), 0)); }
+function render(items = cruds) { updateStats(); list.innerHTML = !items.length ? `<div class="col-span-full rounded-xl border border-dashed border-line bg-panel p-10 text-center"><p class="text-base font-semibold text-white">Nenhum CRUD encontrado</p><p class="mt-2 text-sm text-slate-500">Crie a primeira estrutura para ela aparecer aqui.</p></div>` : items.map(c => `<button data-open="${c.id}" class="rounded-xl border border-line bg-panel p-5 text-left transition hover:border-violet hover:bg-slate-900"><div class="mb-6 flex justify-between"><div class="grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br from-violet-500 to-indigo-500 text-xl">${c.orientation ? '↕' : '↔'}</div><span class="text-xs text-violet-300">Abrir →</span></div><h3 class="text-base font-semibold text-white">${escapeHtml(c.name)}</h3><div class="mt-2"><span class="rounded bg-slate-800 px-2 py-1 text-xs text-slate-400">${c.orientation ? 'Vertical' : 'Horizontal'}</span></div><div class="mt-6 grid grid-cols-2 border-t border-line pt-4 text-sm"><div><p class="text-xs text-slate-500">Colunas</p><p class="mt-1 font-semibold">${c.columns}</p></div><div class="border-l border-line pl-4"><p class="text-xs text-slate-500">Registros</p><p class="mt-1 font-semibold">${c.records}</p></div></div></button>`).join(''); document.querySelectorAll('[data-open]').forEach(button => button.onclick = () => openCrud(button.dataset.open)); }
+function setConnectionStatus(connected) { databaseAvailable = connected; status.innerHTML = connected ? '<span class="h-2 w-2 rounded-full bg-emerald-400"></span> MySQL conectado' : '<span class="h-2 w-2 rounded-full bg-slate-500"></span> MySQL indisponível'; document.querySelector('#newCrud').disabled = !connected; }
+async function loadCruds() { try { const payload = await request('cruds'); cruds = payload.cruds.map(c => ({ ...c, orientation: +c.orientation, columns: +c.columns, records: +c.records })); setConnectionStatus(true); } catch { cruds = []; setConnectionStatus(false); } render(); }
 
-function updateStats() {
-  document.querySelector('#crudCount').textContent = format.format(cruds.length);
-  document.querySelector('#recordCount').textContent = format.format(cruds.reduce((total, crud) => total + Number(crud.records), 0));
-  document.querySelector('#columnCount').textContent = format.format(cruds.reduce((total, crud) => total + Number(crud.columns), 0));
-}
+function field(column, value = '') { const name = `value-${column.id}`; if (column.type === 2) return `<select name="${name}" class="input"><option value="">Selecione…</option>${column.options.map(o => `<option value="${o.id}" ${String(value) === String(o.id) ? 'selected' : ''}>${escapeHtml(o.value)}</option>`).join('')}</select>`; return `<input class="input" name="${name}" type="${column.type === 1 ? 'number' : 'text'}" value="${escapeHtml(value)}" />`; }
+function renderDetail() { const c = activeCrud, columns = c.columns; document.querySelector('#dashboard').classList.add('hidden'); const page = document.querySelector('#detail'); page.classList.remove('hidden'); document.querySelector('#detailTitle').textContent = c.name; document.querySelector('#detailDescription').textContent = `${c.orientation ? 'Registros em colunas' : 'Registros em linhas'} · ${columns.length} coluna(s)`; document.querySelector('#columnsList').innerHTML = columns.length ? columns.map(col => `<div class="flex items-center justify-between rounded-lg border border-line bg-slate-950/30 p-3"><div><b class="text-sm text-white">${escapeHtml(col.name)}</b><p class="mt-1 text-xs text-slate-500">${['Texto', 'Número', 'Seleção'][col.type]}${col.type === 2 ? ` · ${col.options.map(o => escapeHtml(o.value)).join(', ') || 'sem opções'}` : ''}</p></div><button data-delete-column="${col.id}" class="text-sm text-rose-300 hover:text-rose-200">Remover</button></div>`).join('') : '<p class="rounded-lg border border-dashed border-line p-4 text-sm text-slate-500">Adicione colunas para começar.</p>';
+  const head = columns.map(col => `<th class="px-4 py-3 text-left text-xs font-medium text-slate-400">${escapeHtml(col.name)}</th>`).join(''); const body = c.records.length ? c.records.map(record => `<tr class="border-t border-line">${columns.map(col => `<td class="px-4 py-3 text-sm">${col.type === 2 ? escapeHtml((col.options.find(o => String(o.id) === String(record.values[col.id])) || {}).value || '') : escapeHtml(record.values[col.id] || '')}</td>`).join('')}<td class="whitespace-nowrap px-4 py-3"><button data-edit="${record.id}" class="text-sm text-violet-300">Editar</button><button data-delete-record="${record.id}" class="ml-3 text-sm text-rose-300">Excluir</button></td></tr>`).join('') : `<tr><td colspan="${columns.length + 1}" class="p-7 text-center text-sm text-slate-500">Nenhum registro cadastrado.</td></tr>`; document.querySelector('#recordsTable').innerHTML = `<thead><tr>${head}<th class="px-4 py-3"></th></tr></thead><tbody>${body}</tbody>`;
+  document.querySelectorAll('[data-delete-column]').forEach(b => b.onclick = () => deleteColumn(b.dataset.deleteColumn)); document.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => showRecordForm(c.records.find(r => r.id === +b.dataset.edit))); document.querySelectorAll('[data-delete-record]').forEach(b => b.onclick = () => deleteRecord(b.dataset.deleteRecord)); }
+async function openCrud(id) { try { activeCrud = (await request(`cruds/${id}`)).crud; activeCrud.orientation = +activeCrud.orientation; activeCrud.records = activeCrud.records || []; renderDetail(); } catch (e) { alert(e.message); } }
+async function refreshActive() { await openCrud(activeCrud.id); await loadCruds(); }
+function showRecordForm(record = null) { const c = activeCrud; document.querySelector('#recordFormTitle').textContent = record ? 'Editar registro' : 'Novo registro'; document.querySelector('#recordForm').innerHTML = c.columns.map(col => `<label class="block text-sm text-slate-300">${escapeHtml(col.name)}${field(col, record?.values[col.id])}</label>`).join('') + `<div class="mt-5 flex justify-end gap-2"><button type="button" id="cancelRecord" class="rounded-lg px-3 py-2 text-sm text-slate-400">Cancelar</button><button class="rounded-lg bg-violet px-4 py-2 text-sm font-semibold text-white">Salvar</button></div>`; const modal = document.querySelector('#recordModal'); modal.classList.replace('hidden', 'flex'); document.querySelector('#cancelRecord').onclick = () => modal.classList.replace('flex', 'hidden'); document.querySelector('#recordForm').onsubmit = async e => { e.preventDefault(); const values = Object.fromEntries([...new FormData(e.target)].map(([k, v]) => [k.replace('value-', ''), v])); try { await request(`cruds/${c.id}/records${record ? `/${record.id}` : ''}`, { method: record ? 'PATCH' : 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({values}) }); modal.classList.replace('flex', 'hidden'); refreshActive(); } catch (err) { alert(err.message); } }; }
+async function deleteRecord(id) { if (confirm('Excluir este registro?')) { try { await request(`cruds/${activeCrud.id}/records/${id}`, {method:'DELETE'}); refreshActive(); } catch(e) { alert(e.message); } } }
+async function deleteColumn(id) { if (confirm('Remover esta coluna deste CRUD?')) { try { await request(`cruds/${activeCrud.id}/columns/${id}`, {method:'DELETE'}); refreshActive(); } catch(e) { alert(e.message); } } }
 
-function render(items = cruds) {
-  updateStats();
-  if (!items.length) {
-    list.innerHTML = `<div class="col-span-full rounded-xl border border-dashed border-line bg-panel p-10 text-center"><p class="text-base font-semibold text-white">Nenhum CRUD encontrado</p><p class="mt-2 text-sm text-slate-500">Crie a primeira estrutura para ela aparecer aqui.</p></div>`;
-    return;
-  }
-
-  list.innerHTML = items.map(crud => `<article class="rounded-xl border border-line bg-panel p-5"><div class="mb-6 flex justify-between"><div class="grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br from-violet-500 to-indigo-500"><span class="text-xl">${crud.orientation ? '↕' : '↔'}</span></div></div><h3 class="text-base font-semibold text-white">${escapeHtml(crud.name)}</h3><div class="mt-2 flex items-center gap-2 text-xs text-slate-500"><span class="rounded bg-slate-800 px-2 py-1">${crud.orientation ? 'Vertical' : 'Horizontal'}</span></div><div class="mt-6 grid grid-cols-2 border-t border-line pt-4"><div><p class="text-xs text-slate-500">Colunas</p><p class="mt-1 text-sm font-semibold text-slate-200">${format.format(crud.columns)}</p></div><div class="border-l border-line pl-4"><p class="text-xs text-slate-500">Registros</p><p class="mt-1 text-sm font-semibold text-slate-200">${format.format(crud.records)}</p></div></div></article>`).join('');
-}
-
-function setConnectionStatus(connected) {
-  databaseAvailable = connected;
-  status.innerHTML = connected
-    ? '<span class="h-2 w-2 rounded-full bg-emerald-400"></span> MySQL conectado'
-    : '<span class="h-2 w-2 rounded-full bg-slate-500"></span> MySQL indisponível';
-  document.querySelector('#newCrud').disabled = !connected;
-  document.querySelector('#newCrud').title = connected ? '' : 'Configure o MySQL e inicie o servidor PHP para criar CRUDs.';
-}
-
-async function loadCruds() {
-  try {
-    const response = await fetch('api.php/cruds');
-    const payload = await response.json();
-    if (!response.ok) throw new Error(payload.error);
-    cruds = payload.cruds.map(crud => ({
-      ...crud,
-      orientation: Number(crud.orientation),
-      columns: Number(crud.columns),
-      records: Number(crud.records)
-    }));
-    setConnectionStatus(true);
-  } catch (error) {
-    cruds = [];
-    setConnectionStatus(false);
-  }
-  render();
-}
-
-const modal = document.querySelector('#modal');
-const showModal = () => modal.classList.replace('hidden', 'flex');
-const hideModal = () => modal.classList.replace('flex', 'hidden');
-document.querySelector('#newCrud').onclick = showModal;
-document.querySelector('#closeModal').onclick = hideModal;
-document.querySelector('#cancel').onclick = hideModal;
-modal.onclick = event => { if (event.target === modal) hideModal(); };
-
-document.querySelector('#crudForm').onsubmit = async event => {
-  event.preventDefault();
-  const name = document.querySelector('#crudName').value.trim();
-  const orientation = Number(document.querySelector('input[name="orientation"]:checked').value);
-  if (!name || !databaseAvailable) return;
-
-  const submit = event.submitter;
-  submit.disabled = true;
-  try {
-    const response = await fetch('api.php/cruds', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, orientation }) });
-    const payload = await response.json();
-    if (!response.ok) throw new Error(payload.error);
-    cruds.unshift(payload.crud);
-    render();
-    event.target.reset();
-    hideModal();
-  } catch (error) {
-    alert(`Não foi possível criar o CRUD: ${error.message || 'erro de conexão.'}`);
-    await loadCruds();
-  } finally {
-    submit.disabled = false;
-  }
-};
-
-document.querySelector('#search').oninput = event => render(cruds.filter(crud => crud.name.toLowerCase().includes(event.target.value.toLowerCase())));
+const modal = document.querySelector('#modal'); const showModal = () => modal.classList.replace('hidden', 'flex'); const hideModal = () => modal.classList.replace('flex', 'hidden'); document.querySelector('#newCrud').onclick = showModal; document.querySelector('#closeModal').onclick = hideModal; document.querySelector('#cancel').onclick = hideModal;
+document.querySelector('#crudForm').onsubmit = async e => { e.preventDefault(); try { const name = document.querySelector('#crudName').value.trim(), orientation = +document.querySelector('input[name="orientation"]:checked').value; if (!name) return; await request('cruds', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,orientation})}); hideModal(); e.target.reset(); loadCruds(); } catch(err) { alert(err.message); } };
+document.querySelector('#backToDashboard').onclick = () => { document.querySelector('#detail').classList.add('hidden'); document.querySelector('#dashboard').classList.remove('hidden'); loadCruds(); };
+document.querySelector('#newRecord').onclick = () => showRecordForm();
+document.querySelector('#columnType').onchange = e => document.querySelector('#columnOptions').classList.toggle('hidden', e.target.value !== '2');
+document.querySelector('#columnForm').onsubmit = async e => { e.preventDefault(); const data = new FormData(e.target), type = +data.get('type'); const options = String(data.get('options') || '').split('\n').map(v => v.trim()).filter(Boolean); try { await request(`cruds/${activeCrud.id}/columns`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:data.get('name'),type,position:+data.get('position'),options})}); e.target.reset(); document.querySelector('#columnOptions').classList.add('hidden'); refreshActive(); } catch(err) { alert(err.message); } };
+document.querySelector('#search').oninput = e => render(cruds.filter(c => c.name.toLowerCase().includes(e.target.value.toLowerCase())));
 loadCruds();
