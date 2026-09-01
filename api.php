@@ -12,7 +12,27 @@ function environment(): array {
     if (!is_readable($path)) throw new RuntimeException('Arquivo .env não encontrado.');
     $values = parse_ini_file($path, false, INI_SCANNER_RAW);
     if ($values === false) throw new RuntimeException('Não foi possível ler o arquivo .env.');
+    foreach (['MYSQL_HOST', 'MYSQL_PORT', 'MYSQL_DATABASE', 'MYSQL_USER', 'MYSQL_PASSWORD'] as $key) {
+        if (!array_key_exists($key, $values) || trim((string) $values[$key]) === '') {
+            throw new RuntimeException("A configuração {$key} está ausente no arquivo .env.");
+        }
+    }
+    if (filter_var($values['MYSQL_PORT'], FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 65535]]) === false) {
+        throw new RuntimeException('MYSQL_PORT deve ser uma porta entre 1 e 65535.');
+    }
     return $values;
+}
+function databaseError(Throwable $error): string {
+    if ($error instanceof PDOException) {
+        $message = $error->getMessage();
+        if (str_contains($message, '[1045]')) return 'Acesso negado pelo MySQL. Confira MYSQL_USER, MYSQL_PASSWORD e as permissões desse usuário no banco.';
+        if (str_contains($message, '[1049]')) return 'O banco informado em MYSQL_DATABASE não existe. Importe o schema nesse banco ou corrija o nome.';
+        if (str_contains($message, '[2002]') || str_contains($message, '[2003]')) return 'Não foi possível alcançar o servidor MySQL. Confira MYSQL_HOST, MYSQL_PORT e se o host libera conexões para esta aplicação.';
+        if (str_contains($message, '[42S02]')) return 'A estrutura do banco não foi encontrada. Importe o arquivo database/schema.sql no banco configurado.';
+        if (str_contains($message, 'could not find driver')) return 'A extensão PHP pdo_mysql não está habilitada neste servidor.';
+    }
+    if ($error instanceof RuntimeException) return $error->getMessage();
+    return 'Não foi possível concluir a operação no MySQL. Consulte o log de erros do PHP para mais detalhes.';
 }
 function crud(PDO $db, int $id): array {
     $query = $db->prepare('SELECT id, nome_do_crud AS name, orientacao_colunas AS orientation FROM cruds WHERE id = ?');
@@ -66,11 +86,13 @@ function saveValues(PDO $db, int $recordId, array $columns, array $values): void
 try {
     $env = environment();
     $dsn = sprintf('mysql:host=%s;port=%s;dbname=%s;charset=utf8mb4', $env['MYSQL_HOST'] ?? 'localhost', $env['MYSQL_PORT'] ?? '3306', $env['MYSQL_DATABASE'] ?? 'crud_de_cruds');
-    $db = new PDO($dsn, $env['MYSQL_USER'] ?? '', $env['MYSQL_PASSWORD'] ?? '', [
+    $options = [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_TIMEOUT => 5,
-        PDO::MYSQL_ATTR_CONNECT_TIMEOUT => 5,
-    ]);
+    ];
+    // PDO::MYSQL_ATTR_CONNECT_TIMEOUT is not defined by every pdo_mysql build.
+    // PDO::ATTR_TIMEOUT keeps the connection attempt bounded without causing a fatal error.
+    $db = new PDO($dsn, $env['MYSQL_USER'] ?? '', $env['MYSQL_PASSWORD'] ?? '', $options);
     $method = $_SERVER['REQUEST_METHOD']; $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH) ?? '';
     $route = trim(preg_replace('#^.*api\.php/?#', '', $path), '/'); $parts = $route === '' ? [] : explode('/', $route);
     if (($parts[0] ?? '') === 'health' && $method === 'GET') respond(200, ['mysql' => 'connected']);
@@ -117,4 +139,8 @@ try {
     if ($entity === 'records' && isset($parts[3]) && $method === 'PATCH') { $recordId = (int) $parts[3]; $check = $db->prepare('SELECT id FROM registros_do_crud WHERE id = ? AND id_crud = ?'); $check->execute([$recordId, $crudId]); if (!$check->fetch()) respond(404, ['error' => 'Registro não encontrado.']); $db->beginTransaction(); saveValues($db, $recordId, columns($db, $crudId), input()['values'] ?? []); $db->commit(); respond(200, ['id' => $recordId]); }
     if ($entity === 'records' && isset($parts[3]) && $method === 'DELETE') { $db->prepare('DELETE FROM registros_do_crud WHERE id = ? AND id_crud = ?')->execute([(int) $parts[3], $crudId]); respond(204, []); }
     respond(405, ['error' => 'Método não permitido.']);
-} catch (Throwable $error) { if (isset($db) && $db->inTransaction()) $db->rollBack(); respond(503, ['error' => 'Não foi possível concluir a operação no MySQL. Verifique o .env e se o schema foi importado.']); }
+} catch (Throwable $error) {
+    if (isset($db) && $db->inTransaction()) $db->rollBack();
+    error_log(sprintf('crud MySQL error: %s', $error->getMessage()));
+    respond(503, ['error' => databaseError($error)]);
+}
