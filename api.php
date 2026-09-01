@@ -55,7 +55,10 @@ function saveValues(PDO $db, int $recordId, array $columns, array $values): void
 try {
     $env = environment();
     $dsn = sprintf('mysql:host=%s;port=%s;dbname=%s;charset=utf8mb4', $env['MYSQL_HOST'] ?? 'localhost', $env['MYSQL_PORT'] ?? '3306', $env['MYSQL_DATABASE'] ?? 'crud_de_cruds');
-    $db = new PDO($dsn, $env['MYSQL_USER'] ?? '', $env['MYSQL_PASSWORD'] ?? '', [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    $db = new PDO($dsn, $env['MYSQL_USER'] ?? '', $env['MYSQL_PASSWORD'] ?? '', [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_TIMEOUT => 5,
+    ]);
     $method = $_SERVER['REQUEST_METHOD']; $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH) ?? '';
     $route = trim(preg_replace('#^.*api\.php/?#', '', $path), '/'); $parts = $route === '' ? [] : explode('/', $route);
     if (($parts[0] ?? '') === 'health' && $method === 'GET') respond(200, ['mysql' => 'connected']);
