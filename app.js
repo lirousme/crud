@@ -2,7 +2,22 @@ let cruds = [], activeCrud = null, activeColumn = null, databaseAvailable = fals
 const list = document.querySelector('#crudList'), status = document.querySelector('#databaseStatus');
 const format = new Intl.NumberFormat('pt-BR');
 const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[c]);
-const request = async (path, options = {}) => { const response = await fetch(`api.php/${path}`, { cache: 'no-store', ...options }); const payload = response.status === 204 ? {} : await response.json(); if (!response.ok) throw new Error(payload.error || 'Erro na operação.'); return payload; };
+const REQUEST_TIMEOUT_MS = 10000;
+const request = async (path, options = {}) => {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    const response = await fetch(`api.php/${path}`, { cache: 'no-store', ...options, signal: controller.signal });
+    const payload = response.status === 204 ? {} : await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || `Erro na operação (HTTP ${response.status}).`);
+    return payload;
+  } catch (error) {
+    if (error.name === 'AbortError') throw new Error('A conexão com o servidor demorou mais de 10 segundos.');
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
+  }
+};
 
 function updateStats() { document.querySelector('#crudCount').textContent = format.format(cruds.length); document.querySelector('#recordCount').textContent = format.format(cruds.reduce((n, c) => n + Number(c.records), 0)); document.querySelector('#columnCount').textContent = format.format(cruds.reduce((n, c) => n + Number(c.columns), 0)); }
 function render(items = cruds) {
@@ -11,8 +26,8 @@ function render(items = cruds) {
   document.querySelectorAll('[data-open]').forEach(button => button.onclick = () => openCrud(button.dataset.open));
   document.querySelectorAll('[data-structure]').forEach(button => button.onclick = () => crudStructure(button.dataset.structure));
 }
-function setConnectionStatus(connected) { databaseAvailable = connected; status.innerHTML = connected ? '<span class="h-2 w-2 rounded-full bg-emerald-400"></span> MySQL conectado' : '<span class="h-2 w-2 rounded-full bg-slate-500"></span> MySQL indisponível'; document.querySelector('#newCrud').disabled = !connected; }
-async function loadCruds() { try { await request('health'); const payload = await request('cruds'); cruds = payload.cruds.map(c => ({ ...c, orientation: +c.orientation, columns: +c.columns, records: +c.records })); setConnectionStatus(true); } catch { cruds = []; setConnectionStatus(false); } render(); }
+function setConnectionStatus(connected, detail = '') { databaseAvailable = connected; status.innerHTML = connected ? '<span class="h-2 w-2 rounded-full bg-emerald-400"></span> MySQL conectado' : `<span class="h-2 w-2 rounded-full bg-rose-400"></span> MySQL indisponível${detail ? `: ${escapeHtml(detail)}` : ''}`; document.querySelector('#newCrud').disabled = !connected; }
+async function loadCruds() { try { await request('health'); const payload = await request('cruds'); cruds = payload.cruds.map(c => ({ ...c, orientation: +c.orientation, columns: +c.columns, records: +c.records })); setConnectionStatus(true); } catch (error) { cruds = []; setConnectionStatus(false, error.message); } render(); }
 function showPage(id) { document.querySelector('#dashboard').classList.add('hidden'); document.querySelector('#recordsDetail').classList.add('hidden'); document.querySelector('#structureDetail').classList.add('hidden'); document.querySelector('#optionsDetail').classList.add('hidden'); document.querySelector(id).classList.remove('hidden'); }
 function field(column, value = '') { const name = `value-${column.id}`; if (column.type === 2) return `<select name="${name}" class="input"><option value="">Selecione…</option>${column.options.map(o => `<option value="${o.id}" ${String(value) === String(o.id) ? 'selected' : ''}>${escapeHtml(o.value)}</option>`).join('')}</select>`; return `<input class="input" name="${name}" type="${column.type === 1 ? 'number' : 'text'}" value="${escapeHtml(value)}" />`; }
 function displayValue(column, value) { return column.type === 2 ? escapeHtml((column.options.find(o => String(o.id) === String(value)) || {}).value || '') : escapeHtml(value || ''); }
