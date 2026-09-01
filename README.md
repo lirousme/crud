@@ -38,4 +38,15 @@ Os valores das colunas do tipo `0` são texto, das colunas do tipo `1` são num�
 
 Abra a aplicação pelo servidor PHP. A interface usa Tailwind CSS em modo escuro e consulta o MySQL de verdade: antes de carregar a lista ela verifica a conexão em uma rota própria, sem cache. O status de conexão, os contadores e a lista vêm do banco. Um novo CRUD só é exibido depois de ser inserido na tabela `cruds`; quando o banco estiver indisponível, a interface informa isso e não exibe dados de demonstração.
 
-Cada card de CRUD oferece dois acessos: **Abrir registros**, para adicionar, editar e remover registros, e **Colunas**, para administrar a estrutura de colunas separadamente. Ao editar um registro, deixar um campo em branco remove o valor correspondente do banco de dados.
+Cada card de CRUD oferece dois acessos: **Abrir registros**, para adicionar, editar e remover registros, e **Colunas**, para administrar a estrutura de colunas separadamente. Colunas de seleção (tipo `2`) têm um acesso **Opções** próprio: nele é possível adicionar, editar e remover as opções, sem incluí-las no formulário da estrutura. Ao editar um registro, deixar um campo em branco remove o valor correspondente do banco de dados.
+
+## API de opções de seleção
+
+As opções das colunas tipo `2` são gerenciadas pelas rotas abaixo, sempre vinculadas ao ID da coluna:
+
+- `GET /api.php/columns/{columnId}/options`
+- `POST /api.php/columns/{columnId}/options`
+- `PATCH /api.php/columns/{columnId}/options/{optionId}`
+- `DELETE /api.php/columns/{columnId}/options/{optionId}`
+
+Uma opção que já esteja sendo usada por um registro não pode ser removida.
