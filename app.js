@@ -2,12 +2,21 @@ let cruds = [], activeCrud = null, databaseAvailable = false, editingColumnId = 
 const list = document.querySelector('#crudList'), status = document.querySelector('#databaseStatus');
 const format = new Intl.NumberFormat('pt-BR');
 const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[c]);
-const request = async (path, options = {}) => { const response = await fetch(`api.php/${path}`, options); const payload = response.status === 204 ? {} : await response.json(); if (!response.ok) throw new Error(payload.error || 'Erro na operação.'); return payload; };
+const request = async (path, options = {}) => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const response = await fetch(`api.php/${path}`, { cache: 'no-store', ...options, signal: controller.signal });
+    const payload = response.status === 204 ? {} : await response.json();
+    if (!response.ok) throw new Error(payload.error || 'Erro na operação.');
+    return payload;
+  } finally { clearTimeout(timeout); }
+};
 
 function updateStats() { document.querySelector('#crudCount').textContent = format.format(cruds.length); document.querySelector('#recordCount').textContent = format.format(cruds.reduce((n, c) => n + Number(c.records), 0)); document.querySelector('#columnCount').textContent = format.format(cruds.reduce((n, c) => n + Number(c.columns), 0)); }
 function render(items = cruds) { updateStats(); list.innerHTML = !items.length ? `<div class="col-span-full rounded-xl border border-dashed border-line bg-panel p-10 text-center"><p class="text-base font-semibold text-white">Nenhum CRUD encontrado</p><p class="mt-2 text-sm text-slate-500">Crie a primeira estrutura para ela aparecer aqui.</p></div>` : items.map(c => `<button data-open="${c.id}" class="rounded-xl border border-line bg-panel p-5 text-left transition hover:border-violet hover:bg-slate-900"><div class="mb-6 flex justify-between"><div class="grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br from-violet-500 to-indigo-500 text-xl">${c.orientation ? '↕' : '↔'}</div><span class="text-xs text-violet-300">Abrir →</span></div><h3 class="text-base font-semibold text-white">${escapeHtml(c.name)}</h3><div class="mt-2"><span class="rounded bg-slate-800 px-2 py-1 text-xs text-slate-400">${c.orientation ? 'Vertical' : 'Horizontal'}</span></div><div class="mt-6 grid grid-cols-2 border-t border-line pt-4 text-sm"><div><p class="text-xs text-slate-500">Colunas</p><p class="mt-1 font-semibold">${c.columns}</p></div><div class="border-l border-line pl-4"><p class="text-xs text-slate-500">Registros</p><p class="mt-1 font-semibold">${c.records}</p></div></div></button>`).join(''); document.querySelectorAll('[data-open]').forEach(button => button.onclick = () => openCrud(button.dataset.open)); }
-function setConnectionStatus(connected) { databaseAvailable = connected; status.innerHTML = connected ? '<span class="h-2 w-2 rounded-full bg-emerald-400"></span> MySQL conectado' : '<span class="h-2 w-2 rounded-full bg-slate-500"></span> MySQL indisponível'; document.querySelector('#newCrud').disabled = !connected; }
-async function loadCruds() { try { const payload = await request('cruds'); cruds = payload.cruds.map(c => ({ ...c, orientation: +c.orientation, columns: +c.columns, records: +c.records })); setConnectionStatus(true); } catch { cruds = []; setConnectionStatus(false); } render(); }
+function setConnectionStatus(connected, message = '') { databaseAvailable = connected; status.innerHTML = connected ? '<span class="h-2 w-2 rounded-full bg-emerald-400"></span> MySQL conectado' : `<span class="h-2 w-2 rounded-full bg-slate-500"></span> ${message || 'MySQL indisponível'}`; document.querySelector('#newCrud').disabled = !connected; }
+async function loadCruds() { try { await request('health'); const payload = await request('cruds'); cruds = payload.cruds.map(c => ({ ...c, orientation: +c.orientation, columns: +c.columns, records: +c.records })); setConnectionStatus(true); } catch (error) { cruds = []; setConnectionStatus(false, error.name === 'AbortError' ? 'MySQL não respondeu' : 'MySQL indisponível'); } render(); }
 
 function field(column, value = '') { const name = `value-${column.id}`; if (column.type === 2) return `<select name="${name}" class="input"><option value="">Selecione…</option>${column.options.map(o => `<option value="${o.id}" ${String(value) === String(o.id) ? 'selected' : ''}>${escapeHtml(o.value)}</option>`).join('')}</select>`; return `<input class="input" name="${name}" type="${column.type === 1 ? 'number' : 'text'}" value="${escapeHtml(value)}" />`; }
 function displayValue(column, value) { return column.type === 2 ? escapeHtml((column.options.find(o => String(o.id) === String(value)) || {}).value || '') : escapeHtml(value || ''); }

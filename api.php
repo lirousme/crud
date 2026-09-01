@@ -2,6 +2,8 @@
 declare(strict_types=1);
 
 header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
 
 function respond(int $status, array $payload): never { http_response_code($status); echo json_encode($payload, JSON_UNESCAPED_UNICODE); exit; }
 function input(): array { $data = json_decode(file_get_contents('php://input'), true); return is_array($data) ? $data : []; }
@@ -34,9 +36,15 @@ function records(PDO $db, int $crudId): array {
 function saveValues(PDO $db, int $recordId, array $columns, array $values): void {
     foreach ($columns as $column) {
         $key = (string) $column['id']; $value = $values[$key] ?? $values[(int) $column['id']] ?? null;
-        if ($value === null || $value === '') continue;
         $type = (int) $column['type'];
-        if ($type === 0) { $table = 'c_zero_valores'; $value = (string) $value; }
+        if ($type === 0) { $table = 'c_zero_valores'; }
+        elseif ($type === 1) { $table = 'c_um_valores'; }
+        else { $table = 'c_dois_valores'; }
+        if ($value === null || $value === '') {
+            $db->prepare("DELETE FROM $table WHERE id_registro = ? AND id_coluna = ?")->execute([$recordId, $column['id']]);
+            continue;
+        }
+        if ($type === 0) { $value = (string) $value; }
         elseif ($type === 1) { if (filter_var($value, FILTER_VALIDATE_INT) === false) respond(422, ['error' => "{$column['name']} deve ser um número inteiro."]); $table = 'c_um_valores'; $value = (int) $value; }
         else { $valid = array_column($column['options'], 'id'); if (!in_array((int) $value, array_map('intval', $valid), true)) respond(422, ['error' => "Selecione uma opção válida para {$column['name']}."]); $table = 'c_dois_valores'; $value = (int) $value; }
         $statement = $db->prepare("INSERT INTO $table (id_registro, id_coluna, valor_da_coluna) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE valor_da_coluna = VALUES(valor_da_coluna)");
@@ -47,12 +55,16 @@ function saveValues(PDO $db, int $recordId, array $columns, array $values): void
 try {
     $env = environment();
     $dsn = sprintf('mysql:host=%s;port=%s;dbname=%s;charset=utf8mb4', $env['MYSQL_HOST'] ?? 'localhost', $env['MYSQL_PORT'] ?? '3306', $env['MYSQL_DATABASE'] ?? 'crud_de_cruds');
-    $db = new PDO($dsn, $env['MYSQL_USER'] ?? '', $env['MYSQL_PASSWORD'] ?? '', [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    $db = new PDO($dsn, $env['MYSQL_USER'] ?? '', $env['MYSQL_PASSWORD'] ?? '', [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_TIMEOUT => 5,
+    ]);
     $method = $_SERVER['REQUEST_METHOD']; $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH) ?? '';
     $route = trim(preg_replace('#^.*api\.php/?#', '', $path), '/'); $parts = $route === '' ? [] : explode('/', $route);
+    if (($parts[0] ?? '') === 'health' && $method === 'GET') respond(200, ['mysql' => 'connected']);
     if (($parts[0] ?? '') !== 'cruds') respond(404, ['error' => 'Rota não encontrada.']);
     if (count($parts) === 1 && $method === 'GET') { $statement = $db->query('SELECT c.id, c.nome_do_crud AS name, c.orientacao_colunas AS orientation, COUNT(DISTINCT cc.id_coluna) AS columns, COUNT(DISTINCT r.id) AS records FROM cruds c LEFT JOIN cruds_colunas cc ON cc.id_crud = c.id LEFT JOIN registros_do_crud r ON r.id_crud = c.id GROUP BY c.id ORDER BY c.id DESC'); respond(200, ['cruds' => $statement->fetchAll(PDO::FETCH_ASSOC)]); }
-    if (count($parts) === 1 && $method === 'POST') { $data = input(); $name = trim((string) ($data['name'] ?? '')); $orientation = $data['orientation'] ?? null; if ($name === '' || mb_strlen($name) > 150 || !in_array($orientation, [0, 1], true)) respond(422, ['error' => 'Nome ou orientação inválidos.']); $statement = $db->prepare('INSERT INTO cruds (nome_do_crud, orientacao_colunas) VALUES (?, ?)'); $statement->execute([$name, $orientation]); respond(201, ['crud' => ['id' => (int) $db->lastInsertId(), 'name' => $name, 'orientation' => $orientation, 'columns' => 0, 'records' => 0]]); }
+    if (count($parts) === 1 && $method === 'POST') { $data = input(); $name = trim((string) ($data['name'] ?? '')); $orientation = $data['orientation'] ?? null; if ($name === '' || mb_strlen($name) > 150 || !in_array($orientation, [0, 1], true)) respond(422, ['error' => 'Nome ou orientação inválidos.']); $statement = $db->prepare('INSERT INTO cruds (nome_do_crud, orientacao_colunas) VALUES (?, ?)'); $statement->execute([$name, $orientation]); $created = crud($db, (int) $db->lastInsertId()); $created['orientation'] = (int) $created['orientation']; $created['columns'] = 0; $created['records'] = 0; respond(201, ['crud' => $created]); }
     $crudId = filter_var($parts[1] ?? null, FILTER_VALIDATE_INT); if (!$crudId) respond(404, ['error' => 'CRUD não encontrado.']); $entity = $parts[2] ?? '';
     if ($entity === '' && $method === 'GET') { $item = crud($db, $crudId); $item['orientation'] = (int) $item['orientation']; $item['columns'] = columns($db, $crudId); $item['records'] = records($db, $crudId); respond(200, ['crud' => $item]); }
     if ($entity === 'columns' && $method === 'POST') { crud($db, $crudId); $data = input(); $name = trim((string) ($data['name'] ?? '')); $type = $data['type'] ?? null; $position = $data['position'] ?? 0; if ($name === '' || !in_array($type, [0, 1, 2], true) || filter_var($position, FILTER_VALIDATE_INT) === false) respond(422, ['error' => 'Dados da coluna inválidos.']); $db->beginTransaction(); $db->prepare('INSERT INTO colunas (nome_da_coluna, tipo, ordem) VALUES (?, ?, ?)')->execute([$name, $type, $position]); $columnId = (int) $db->lastInsertId(); $db->prepare('INSERT INTO cruds_colunas (id_crud, id_coluna) VALUES (?, ?)')->execute([$crudId, $columnId]); if ($type === 2) { foreach ($data['options'] ?? [] as $index => $option) { $option = trim((string) $option); if ($option !== '') $db->prepare('INSERT INTO opcoes_colunas (id_coluna, valor_da_opcao, ordem) VALUES (?, ?, ?)')->execute([$columnId, $option, $index]); } } $db->commit(); respond(201, ['column' => columns($db, $crudId)[count(columns($db, $crudId)) - 1]]); }
