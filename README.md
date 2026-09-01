@@ -38,4 +38,4 @@ Os valores das colunas do tipo `0` são texto, das colunas do tipo `1` são num�
 
 Abra a aplicação pelo servidor PHP. A interface usa Tailwind CSS em modo escuro e consulta o MySQL de verdade: antes de carregar a lista ela verifica a conexão em uma rota própria, sem cache. O status de conexão, os contadores e a lista vêm do banco. Um novo CRUD só é exibido depois de ser inserido na tabela `cruds`; quando o banco estiver indisponível, a interface informa isso e não exibe dados de demonstração.
 
-Ao abrir um CRUD, é possível administrar as colunas e os registros. Ao editar um registro, deixar um campo em branco remove o valor correspondente do banco de dados.
+Cada card de CRUD oferece dois acessos: **Abrir registros**, para adicionar, editar e remover registros, e **Colunas**, para administrar a estrutura de colunas separadamente. Ao editar um registro, deixar um campo em branco remove o valor correspondente do banco de dados.
