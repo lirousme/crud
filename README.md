@@ -40,6 +40,8 @@ Abra a aplicação pelo servidor PHP. A interface usa Tailwind CSS em modo escur
 
 Cada card de CRUD oferece dois acessos: **Abrir registros**, para adicionar, editar e remover registros, e **Colunas**, para administrar a estrutura de colunas separadamente. Colunas de seleção (tipo `2`) têm um acesso **Opções** próprio: nele é possível adicionar, editar e remover as opções, sem incluí-las no formulário da estrutura. Ao editar um registro, deixar um campo em branco remove o valor correspondente do banco de dados.
 
+Se o servidor ou MySQL não responder em até 10 segundos, a interface troca o estado de **Verificando MySQL…** por uma mensagem de indisponibilidade e desabilita a criação de CRUDs. Confira se o `.env` está no mesmo diretório de `api.php`, se o usuário tem acesso ao banco definido em `MYSQL_DATABASE` e se o schema foi importado.
+
 ## API de opções de seleção
 
 As opções das colunas tipo `2` são gerenciadas pelas rotas abaixo, sempre vinculadas ao ID da coluna:
