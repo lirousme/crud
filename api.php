@@ -27,6 +27,17 @@ function columns(PDO $db, int $crudId): array {
     foreach ($columns as &$column) { $column['type'] = (int) $column['type']; $column['position'] = (int) $column['position']; $options->execute([$column['id']]); $column['options'] = $options->fetchAll(PDO::FETCH_ASSOC); }
     return $columns;
 }
+function selectionColumn(PDO $db, int $columnId): array {
+    $query = $db->prepare('SELECT id, nome_da_coluna AS name, tipo AS type, ordem AS position FROM colunas WHERE id = ?');
+    $query->execute([$columnId]); $column = $query->fetch(PDO::FETCH_ASSOC);
+    if (!$column) respond(404, ['error' => 'Coluna não encontrada.']);
+    if ((int) $column['type'] !== 2) respond(422, ['error' => 'Apenas colunas de seleção possuem opções.']);
+    $column['type'] = (int) $column['type']; $column['position'] = (int) $column['position'];
+    $options = $db->prepare('SELECT id, valor_da_opcao AS value, ordem AS position FROM opcoes_colunas WHERE id_coluna = ? ORDER BY ordem, id');
+    $options->execute([$columnId]); $column['options'] = $options->fetchAll(PDO::FETCH_ASSOC);
+    foreach ($column['options'] as &$option) $option['position'] = (int) $option['position'];
+    return $column;
+}
 function records(PDO $db, int $crudId): array {
     $query = $db->prepare('SELECT r.id, c.id AS column_id, c.tipo, COALESCE(z.valor_da_coluna, u.valor_da_coluna, d.valor_da_coluna) AS value FROM registros_do_crud r JOIN cruds_colunas cc ON cc.id_crud = r.id_crud JOIN colunas c ON c.id = cc.id_coluna LEFT JOIN c_zero_valores z ON z.id_registro = r.id AND z.id_coluna = c.id LEFT JOIN c_um_valores u ON u.id_registro = r.id AND u.id_coluna = c.id LEFT JOIN c_dois_valores d ON d.id_registro = r.id AND d.id_coluna = c.id WHERE r.id_crud = ? ORDER BY r.id DESC, c.ordem');
     $query->execute([$crudId]); $output = [];
@@ -62,6 +73,22 @@ try {
     $method = $_SERVER['REQUEST_METHOD']; $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH) ?? '';
     $route = trim(preg_replace('#^.*api\.php/?#', '', $path), '/'); $parts = $route === '' ? [] : explode('/', $route);
     if (($parts[0] ?? '') === 'health' && $method === 'GET') respond(200, ['mysql' => 'connected']);
+    if (($parts[0] ?? '') === 'columns') {
+        $columnId = filter_var($parts[1] ?? null, FILTER_VALIDATE_INT); if (!$columnId || ($parts[2] ?? '') !== 'options') respond(404, ['error' => 'Rota não encontrada.']);
+        if (count($parts) === 3 && $method === 'GET') respond(200, ['column' => selectionColumn($db, $columnId)]);
+        if (count($parts) === 3 && $method === 'POST') {
+            selectionColumn($db, $columnId); $data = input(); $value = trim((string) ($data['value'] ?? '')); $position = $data['position'] ?? null;
+            if ($value === '' || mb_strlen($value) > 255 || filter_var($position, FILTER_VALIDATE_INT) === false) respond(422, ['error' => 'Dados da opção inválidos.']);
+            $statement = $db->prepare('INSERT INTO opcoes_colunas (id_coluna, valor_da_opcao, ordem) VALUES (?, ?, ?)'); $statement->execute([$columnId, $value, $position]); respond(201, ['option' => ['id' => (int) $db->lastInsertId(), 'value' => $value, 'position' => (int) $position]]);
+        }
+        $optionId = filter_var($parts[3] ?? null, FILTER_VALIDATE_INT);
+        if (!$optionId) respond(404, ['error' => 'Opção não encontrada.']);
+        selectionColumn($db, $columnId);
+        $option = $db->prepare('SELECT id FROM opcoes_colunas WHERE id = ? AND id_coluna = ?'); $option->execute([$optionId, $columnId]); if (!$option->fetch()) respond(404, ['error' => 'Opção não encontrada nesta coluna.']);
+        if ($method === 'PATCH') { $data = input(); $value = trim((string) ($data['value'] ?? '')); $position = $data['position'] ?? null; if ($value === '' || mb_strlen($value) > 255 || filter_var($position, FILTER_VALIDATE_INT) === false) respond(422, ['error' => 'Dados da opção inválidos.']); $db->prepare('UPDATE opcoes_colunas SET valor_da_opcao = ?, ordem = ? WHERE id = ?')->execute([$value, $position, $optionId]); respond(200, ['option' => ['id' => $optionId, 'value' => $value, 'position' => (int) $position]]); }
+        if ($method === 'DELETE') { $used = $db->prepare('SELECT EXISTS(SELECT 1 FROM c_dois_valores WHERE valor_da_coluna = ?)'); $used->execute([$optionId]); if ((int) $used->fetchColumn()) respond(409, ['error' => 'Não é possível remover uma opção que já possui valores.']); $db->prepare('DELETE FROM opcoes_colunas WHERE id = ?')->execute([$optionId]); respond(204, []); }
+        respond(405, ['error' => 'Método não permitido.']);
+    }
     if (($parts[0] ?? '') !== 'cruds') respond(404, ['error' => 'Rota não encontrada.']);
     if (count($parts) === 1 && $method === 'GET') { $statement = $db->query('SELECT c.id, c.nome_do_crud AS name, c.orientacao_colunas AS orientation, COUNT(DISTINCT cc.id_coluna) AS columns, COUNT(DISTINCT r.id) AS records FROM cruds c LEFT JOIN cruds_colunas cc ON cc.id_crud = c.id LEFT JOIN registros_do_crud r ON r.id_crud = c.id GROUP BY c.id ORDER BY c.id DESC'); respond(200, ['cruds' => $statement->fetchAll(PDO::FETCH_ASSOC)]); }
     if (count($parts) === 1 && $method === 'POST') { $data = input(); $name = trim((string) ($data['name'] ?? '')); $orientation = $data['orientation'] ?? null; if ($name === '' || mb_strlen($name) > 150 || !in_array($orientation, [0, 1], true)) respond(422, ['error' => 'Nome ou orientação inválidos.']); $statement = $db->prepare('INSERT INTO cruds (nome_do_crud, orientacao_colunas) VALUES (?, ?)'); $statement->execute([$name, $orientation]); $created = crud($db, (int) $db->lastInsertId()); $created['orientation'] = (int) $created['orientation']; $created['columns'] = 0; $created['records'] = 0; respond(201, ['crud' => $created]); }
@@ -69,7 +96,7 @@ try {
     if ($entity === '' && $method === 'GET') { $item = crud($db, $crudId); $item['orientation'] = (int) $item['orientation']; $item['columns'] = columns($db, $crudId); $item['records'] = records($db, $crudId); respond(200, ['crud' => $item]); }
     if ($entity === 'columns' && $method === 'GET') { $item = crud($db, $crudId); $item['orientation'] = (int) $item['orientation']; $item['columns'] = columns($db, $crudId); respond(200, ['crud' => $item]); }
     if ($entity === 'records' && $method === 'GET') { $item = crud($db, $crudId); $item['orientation'] = (int) $item['orientation']; $item['columns'] = columns($db, $crudId); $item['records'] = records($db, $crudId); respond(200, ['crud' => $item]); }
-    if ($entity === 'columns' && $method === 'POST') { crud($db, $crudId); $data = input(); $name = trim((string) ($data['name'] ?? '')); $type = $data['type'] ?? null; $position = $data['position'] ?? 0; if ($name === '' || !in_array($type, [0, 1, 2], true) || filter_var($position, FILTER_VALIDATE_INT) === false) respond(422, ['error' => 'Dados da coluna inválidos.']); $db->beginTransaction(); $db->prepare('INSERT INTO colunas (nome_da_coluna, tipo, ordem) VALUES (?, ?, ?)')->execute([$name, $type, $position]); $columnId = (int) $db->lastInsertId(); $db->prepare('INSERT INTO cruds_colunas (id_crud, id_coluna) VALUES (?, ?)')->execute([$crudId, $columnId]); if ($type === 2) { foreach ($data['options'] ?? [] as $index => $option) { $option = trim((string) $option); if ($option !== '') $db->prepare('INSERT INTO opcoes_colunas (id_coluna, valor_da_opcao, ordem) VALUES (?, ?, ?)')->execute([$columnId, $option, $index]); } } $db->commit(); respond(201, ['column' => columns($db, $crudId)[count(columns($db, $crudId)) - 1]]); }
+    if ($entity === 'columns' && $method === 'POST') { crud($db, $crudId); $data = input(); $name = trim((string) ($data['name'] ?? '')); $type = $data['type'] ?? null; $position = $data['position'] ?? 0; if ($name === '' || !in_array($type, [0, 1, 2], true) || filter_var($position, FILTER_VALIDATE_INT) === false) respond(422, ['error' => 'Dados da coluna inválidos.']); $db->beginTransaction(); $db->prepare('INSERT INTO colunas (nome_da_coluna, tipo, ordem) VALUES (?, ?, ?)')->execute([$name, $type, $position]); $columnId = (int) $db->lastInsertId(); $db->prepare('INSERT INTO cruds_colunas (id_crud, id_coluna) VALUES (?, ?)')->execute([$crudId, $columnId]); $db->commit(); respond(201, ['column' => ['id' => $columnId, 'name' => $name, 'type' => $type, 'position' => (int) $position, 'options' => []]]); }
     if ($entity === 'columns' && isset($parts[3]) && $method === 'PATCH') {
         $columnId = filter_var($parts[3], FILTER_VALIDATE_INT); crud($db, $crudId);
         $belongs = $db->prepare('SELECT c.id, c.tipo FROM colunas c JOIN cruds_colunas cc ON cc.id_coluna = c.id WHERE cc.id_crud = ? AND c.id = ?');
@@ -79,10 +106,9 @@ try {
         if ($name === '' || !in_array($type, [0, 1, 2], true) || filter_var($position, FILTER_VALIDATE_INT) === false) respond(422, ['error' => 'Dados da coluna inválidos.']);
         $used = $db->prepare('SELECT EXISTS(SELECT 1 FROM c_zero_valores WHERE id_coluna = ?) OR EXISTS(SELECT 1 FROM c_um_valores WHERE id_coluna = ?) OR EXISTS(SELECT 1 FROM c_dois_valores WHERE id_coluna = ?)');
         $used->execute([$columnId, $columnId, $columnId]);
-        if ((int) $used->fetchColumn() && ((int) $current['tipo'] !== (int) $type || (int) $type === 2)) respond(409, ['error' => 'Não é possível alterar o tipo ou as opções de uma coluna que já possui valores.']);
+        if ((int) $used->fetchColumn() && (int) $current['tipo'] !== (int) $type) respond(409, ['error' => 'Não é possível alterar o tipo de uma coluna que já possui valores.']);
         $db->beginTransaction();
         $db->prepare('UPDATE colunas SET nome_da_coluna = ?, tipo = ?, ordem = ? WHERE id = ?')->execute([$name, $type, $position, $columnId]);
-        if ((int) $type === 2) { $db->prepare('DELETE FROM opcoes_colunas WHERE id_coluna = ?')->execute([$columnId]); foreach ($data['options'] ?? [] as $index => $option) { $option = trim((string) $option); if ($option !== '') $db->prepare('INSERT INTO opcoes_colunas (id_coluna, valor_da_opcao, ordem) VALUES (?, ?, ?)')->execute([$columnId, $option, $index]); } }
         $db->commit(); respond(200, ['column' => columns($db, $crudId)]);
     }
     if ($entity === 'columns' && isset($parts[3]) && $method === 'DELETE') { $columnId = (int) $parts[3]; crud($db, $crudId); $db->prepare('DELETE FROM cruds_colunas WHERE id_crud = ? AND id_coluna = ?')->execute([$crudId, $columnId]); respond(204, []); }
