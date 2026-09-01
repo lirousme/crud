@@ -19,6 +19,22 @@ MYSQL_USER=seu_usuario
 MYSQL_PASSWORD=sua_senha
 ```
 
+### Hospedagem compartilhada / cPanel
+
+Em hospedagens compartilhadas, o nome do banco e do usuário frequentemente recebem o prefixo da conta. Por exemplo, se o painel mostrar `cliente_crud` e `cliente_app`, esses são os valores que devem ser usados em `MYSQL_DATABASE` e `MYSQL_USER` — e não apenas `crud` e `app`. Associe o usuário ao banco no painel e conceda todos os privilégios necessários.
+
+Deixe o `.env` no mesmo diretório de `api.php` (por exemplo, `public_html/crud/.env`). Use **uma variável por linha**, sem espaços ao redor do `=`, e mantenha valores com espaços ou caracteres especiais entre aspas:
+
+```dotenv
+MYSQL_HOST=localhost
+MYSQL_PORT=3306
+MYSQL_DATABASE=cliente_crud
+MYSQL_USER=cliente_app
+MYSQL_PASSWORD="senha com # ou espaço"
+```
+
+Depois de atualizar o arquivo, abra `api.php/health` no navegador. A rota agora informa a causa segura da falha, como credenciais recusadas, banco inexistente, host inacessível ou configuração ausente. Ela não retorna a senha.
+
 ## Modelo de dados
 
 - `cruds`: `id`, `nome_do_crud` e `orientacao_colunas` (`INT`, padrão `0`). A orientação `0` mantém as colunas na horizontal e os registros na vertical; a orientação `1` deixa as colunas na vertical e os registros na horizontal.
@@ -40,7 +56,7 @@ Abra a aplicação pelo servidor PHP. A interface usa Tailwind CSS em modo escur
 
 Cada card de CRUD oferece dois acessos: **Abrir registros**, para adicionar, editar e remover registros, e **Colunas**, para administrar a estrutura de colunas separadamente. Colunas de seleção (tipo `2`) têm um acesso **Opções** próprio: nele é possível adicionar, editar e remover as opções, sem incluí-las no formulário da estrutura. Ao editar um registro, deixar um campo em branco remove o valor correspondente do banco de dados.
 
-Se o servidor ou MySQL não responder em até 10 segundos, a interface troca o estado de **Verificando MySQL…** por uma mensagem de indisponibilidade e desabilita a criação de CRUDs. Confira se o `.env` está no mesmo diretório de `api.php`, se o usuário tem acesso ao banco definido em `MYSQL_DATABASE` e se o schema foi importado.
+Se o servidor ou MySQL não responder em até 10 segundos, a interface troca o estado de **Verificando MySQL…** por uma mensagem de indisponibilidade e desabilita a criação de CRUDs. A mensagem agora identifica falhas comuns de configuração e conexão; confira se o `.env` está no mesmo diretório de `api.php`, se o usuário tem acesso ao banco definido em `MYSQL_DATABASE` e se o schema foi importado.
 
 ## API de opções de seleção
 
