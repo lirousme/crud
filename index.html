@@ -19,13 +19,11 @@
         <nav class="space-y-1 text-sm">
           <a class="flex items-center gap-3 rounded-lg bg-violet/15 px-3 py-2.5 font-medium text-violet-300" href="#dashboard">▦ <span>Meus CRUDs</span></a>
           <a class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-slate-400 hover:bg-slate-800" href="#colunas">▤ <span>Colunas compartilhadas</span></a>
-          <a class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-slate-400 hover:bg-slate-800" href="#">◫ <span>Modelos</span><span class="ml-auto rounded bg-slate-800 px-1.5 text-xs">3</span></a>
         </nav>
         <div class="mt-auto rounded-xl border border-line bg-panel p-4">
-          <div class="mb-2 flex items-center gap-2 text-sm font-medium"><span class="h-2 w-2 rounded-full bg-emerald-400"></span> MySQL conectado</div>
-          <p class="text-xs leading-5 text-slate-500">As credenciais ficam protegidas no seu arquivo <code>.env</code>.</p>
+          <div id="databaseStatus" class="mb-2 flex items-center gap-2 text-sm font-medium"><span class="h-2 w-2 rounded-full bg-slate-500"></span> Verificando MySQL…</div>
+          <p class="text-xs leading-5 text-slate-500">O status é verificado no servidor. As credenciais ficam no arquivo <code>.env</code>.</p>
         </div>
-        <div class="mt-5 flex items-center gap-3 border-t border-line pt-5"><div class="grid h-8 w-8 place-items-center rounded-full bg-gradient-to-br from-fuchsia-400 to-violet-600 text-xs font-bold">MA</div><div><p class="text-sm font-medium">Marina Alves</p><p class="text-xs text-slate-500">Administrador</p></div></div>
       </aside>
 
       <main class="min-w-0 flex-1">
@@ -36,7 +34,7 @@
 
         <section id="dashboard" class="mx-auto max-w-7xl p-5 md:p-9">
           <div class="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><h2 class="text-2xl font-bold tracking-tight text-white">Gerencie suas estruturas</h2><p class="mt-1 text-sm text-slate-500">Crie, organize e registre dados com total flexibilidade.</p></div><div class="flex gap-2"><div class="relative"><span class="absolute left-3 top-2.5 text-slate-500">⌕</span><input id="search" class="w-full rounded-lg border border-line bg-panel py-2 pl-9 pr-3 text-sm outline-none placeholder:text-slate-600 focus:border-violet sm:w-56" placeholder="Buscar CRUD..." /></div><button class="rounded-lg border border-line bg-panel px-3 text-sm text-slate-400">≡ Filtros</button></div></div>
-          <div class="mb-7 grid gap-4 sm:grid-cols-3"><div class="rounded-xl border border-line bg-panel p-4"><p class="text-xs font-medium uppercase tracking-wider text-slate-500">CRUDs ativos</p><p class="mt-2 text-2xl font-bold text-white">12 <span class="text-xs font-medium text-emerald-400">+2 este mês</span></p></div><div class="rounded-xl border border-line bg-panel p-4"><p class="text-xs font-medium uppercase tracking-wider text-slate-500">Registros totais</p><p class="mt-2 text-2xl font-bold text-white">2.847</p></div><div class="rounded-xl border border-line bg-panel p-4"><p class="text-xs font-medium uppercase tracking-wider text-slate-500">Colunas compartilhadas</p><p class="mt-2 text-2xl font-bold text-white">38</p></div></div>
+          <div class="mb-7 grid gap-4 sm:grid-cols-3"><div class="rounded-xl border border-line bg-panel p-4"><p class="text-xs font-medium uppercase tracking-wider text-slate-500">CRUDs ativos</p><p id="crudCount" class="mt-2 text-2xl font-bold text-white">0</p></div><div class="rounded-xl border border-line bg-panel p-4"><p class="text-xs font-medium uppercase tracking-wider text-slate-500">Registros totais</p><p id="recordCount" class="mt-2 text-2xl font-bold text-white">0</p></div><div class="rounded-xl border border-line bg-panel p-4"><p class="text-xs font-medium uppercase tracking-wider text-slate-500">Colunas compartilhadas</p><p id="columnCount" class="mt-2 text-2xl font-bold text-white">0</p></div></div>
           <div id="crudList" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3"></div>
         </section>
       </main>

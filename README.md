@@ -7,6 +7,7 @@
 1. Copie o arquivo de exemplo: `cp .env.example .env`.
 2. Preencha no arquivo `.env` as credenciais de acesso ao banco de dados MySQL.
 3. Execute o script [`database/schema.sql`](database/schema.sql) no MySQL.
+4. Inicie a aplicação com `php -S localhost:8000` e abra `http://localhost:8000`.
 
 O arquivo `.env` está incluído no `.gitignore` e **não deve ser versionado**. As credenciais de acesso ao banco de dados MySQL devem ficar exclusivamente nele.
 
@@ -35,4 +36,4 @@ Os valores das colunas do tipo `0` são texto, das colunas do tipo `1` são num�
 
 ## Interface
 
-Abra `index.html` em um navegador. A interface demonstrativa usa Tailwind CSS em modo escuro e inclui busca, filtros, visualização de orientação, criação de CRUD e definição de colunas.
+Abra a aplicação pelo servidor PHP. A interface usa Tailwind CSS em modo escuro e consulta o MySQL de verdade: o status de conexão, os contadores e a lista vêm do banco. Um novo CRUD só é exibido depois de ser inserido na tabela `cruds`; quando o banco estiver indisponível, a interface informa isso e não exibe dados de demonstração.
