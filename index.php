@@ -1,3 +1,12 @@
+<?php
+declare(strict_types=1);
+
+// Ensure each visit validates the HTML document, so deployments are not hidden by a stale page cache.
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
+$appVersion = hash_file('sha256', __DIR__ . '/app.js');
+?>
 <!doctype html>
 <html lang="pt-BR" class="dark">
   <head>
@@ -64,6 +73,6 @@
     </div>
     <div id="recordModal" class="fixed inset-0 z-30 hidden items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm"><div class="w-full max-w-lg rounded-2xl border border-line bg-panel p-6"><h2 id="recordFormTitle" class="mb-5 text-xl font-bold text-white"></h2><form id="recordForm" class="space-y-4"></form></div></div>
     <style>.input{margin-top:.45rem;width:100%;border-radius:.5rem;border:1px solid #24304a;background:#0b1020;padding:.6rem .75rem;color:#e2e8f0;outline:none}.input:focus{border-color:#8b5cf6}</style>
-    <script src="app.js"></script>
+    <script src="app.js?v=<?= rawurlencode($appVersion) ?>"></script>
   </body>
 </html>

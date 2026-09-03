@@ -35,6 +35,13 @@ MYSQL_PASSWORD="senha com # ou espaço"
 
 Depois de atualizar o arquivo, abra `api.php/health` no navegador. A rota agora informa a causa segura da falha, como credenciais recusadas, banco inexistente, host inacessível ou configuração ausente. Ela não retorna a senha.
 
+## Atualizações sem versão em cache
+
+A aplicação é entregue com proteção contra cache para que uma publicação nova não fique escondida pela versão anterior no navegador. A página principal envia os cabeçalhos `Cache-Control: no-store, no-cache, must-revalidate, max-age=0`, `Pragma: no-cache` e `Expires: 0`; além disso, o `app.js` é carregado com uma impressão digital do seu conteúdo na URL. Assim, quando `app.js` muda, sua URL também muda e o navegador baixa a versão nova.
+
+Em servidores Apache/cPanel, o arquivo [`.htaccess`](.htaccess) aplica os mesmos cabeçalhos também a arquivos HTML, JavaScript e CSS. Mantenha esse arquivo junto de `index.php` e `app.js` ao publicar. Se houver CDN, proxy reverso ou cache do provedor, configure-o para respeitar esses cabeçalhos ou crie uma regra de bypass para esses arquivos; nenhum código da aplicação consegue ignorar um cache externo configurado para desconsiderá-los.
+
+
 ## Modelo de dados
 
 - `cruds`: `id`, `nome_do_crud` e `orientacao_colunas` (`INT`, padrão `0`). A orientação `0` mantém as colunas na horizontal e os registros na vertical; a orientação `1` deixa as colunas na vertical e os registros na horizontal.
