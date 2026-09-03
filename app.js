@@ -1,4 +1,4 @@
-let cruds = [], activeCrud = null, activeColumn = null, databaseAvailable = false, editingColumnId = null, editingOptionId = null, dashboardParent = null, dashboardTrail = [];
+let cruds = [], activeCrud = null, activeColumn = null, databaseAvailable = false, editingCrudId = null, editingColumnId = null, editingOptionId = null, dashboardParent = null, dashboardTrail = [];
 let recordsSort = { columnId: null, direction: 'asc' };
 const list = document.querySelector('#crudList'), status = document.querySelector('#databaseStatus');
 const format = new Intl.NumberFormat('pt-BR');
@@ -23,10 +23,11 @@ const request = async (path, options = {}) => {
 function updateStats() { document.querySelector('#crudCount').textContent = format.format(cruds.length); document.querySelector('#recordCount').textContent = format.format(cruds.reduce((n, c) => n + Number(c.records), 0)); document.querySelector('#columnCount').textContent = format.format(cruds.reduce((n, c) => n + Number(c.columns), 0)); document.querySelector('#dashboardTitle').textContent = dashboardParent ? `CRUDs de ${dashboardParent.name}` : 'Gerencie suas estruturas'; document.querySelector('#dashboardDescription').textContent = dashboardParent ? 'Crie e organize os CRUDs desta estrutura.' : 'Crie, organize e registre dados com total flexibilidade.'; document.querySelector('#dashboardBack').classList.toggle('hidden', !dashboardParent); }
 function render(items = cruds) {
   updateStats();
-  list.innerHTML = !items.length ? `<div class="col-span-full rounded-xl border border-dashed border-line bg-panel p-10 text-center"><p class="text-base font-semibold text-white">Nenhum CRUD encontrado</p><p class="mt-2 text-sm text-slate-500">Crie a primeira estrutura para ela aparecer aqui.</p></div>` : items.map(c => { const isFolder = +c.type === 1; return `<article class="rounded-xl border border-line bg-panel p-5 transition hover:border-violet hover:bg-slate-900"><div class="mb-6 flex justify-between"><div class="grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br from-violet-500 to-indigo-500 text-xl">${isFolder ? '▦' : (c.orientation ? '↕' : '↔')}</div><span class="text-xs text-slate-500">${isFolder ? `${c.children || 0} CRUD(s)` : `${c.columns} coluna(s)`}</span></div><h3 class="text-base font-semibold text-white">${escapeHtml(c.name)}</h3><div class="mt-2"><span class="rounded bg-slate-800 px-2 py-1 text-xs text-slate-400">${isFolder ? 'CRUD de CRUDs' : (c.orientation ? 'Vertical' : 'Horizontal')}</span></div><div class="mt-6 grid grid-cols-2 border-t border-line pt-4 text-sm"><div><p class="text-xs text-slate-500">${isFolder ? 'CRUDs internos' : 'Colunas'}</p><p class="mt-1 font-semibold">${isFolder ? c.children || 0 : c.columns}</p></div><div class="border-l border-line pl-4"><p class="text-xs text-slate-500">${isFolder ? 'Tipo' : 'Registros'}</p><p class="mt-1 font-semibold">${isFolder ? 'Agrupador' : c.records}</p></div></div><div class="mt-5 ${isFolder ? '' : 'grid grid-cols-2 gap-2'}"><button ${isFolder ? `data-open-children="${c.id}"` : `data-open="${c.id}"`} class="w-full rounded-lg bg-violet px-3 py-2 text-sm font-semibold text-white hover:bg-violet-500">${isFolder ? 'Abrir CRUDs' : 'Abrir registros'}</button>${isFolder ? '' : `<button data-structure="${c.id}" class="rounded-lg border border-line px-3 py-2 text-sm font-semibold text-violet-200 hover:bg-violet/10">Colunas</button>`}</div></article>`; }).join('');
+  list.innerHTML = !items.length ? `<div class="col-span-full rounded-xl border border-dashed border-line bg-panel p-10 text-center"><p class="text-base font-semibold text-white">Nenhum CRUD encontrado</p><p class="mt-2 text-sm text-slate-500">Crie a primeira estrutura para ela aparecer aqui.</p></div>` : items.map(c => { const isFolder = +c.type === 1; return `<article class="relative rounded-xl border border-line bg-panel p-5 transition hover:border-violet hover:bg-slate-900"><button data-settings="${c.id}" type="button" aria-label="Configurar ${escapeHtml(c.name)}" title="Configurar CRUD" class="absolute right-4 top-4 grid h-8 w-8 place-items-center rounded-lg text-lg text-slate-400 hover:bg-slate-800 hover:text-violet-200 focus:outline-none focus:ring-2 focus:ring-violet">⚙</button><div class="mb-6 flex justify-between pr-10"><div class="grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br from-violet-500 to-indigo-500 text-xl">${isFolder ? '▦' : (c.orientation ? '↕' : '↔')}</div><span class="text-xs text-slate-500">${isFolder ? `${c.children || 0} CRUD(s)` : `${c.columns} coluna(s)`}</span></div><h3 class="text-base font-semibold text-white">${escapeHtml(c.name)}</h3><div class="mt-2"><span class="rounded bg-slate-800 px-2 py-1 text-xs text-slate-400">${isFolder ? 'CRUD de CRUDs' : (c.orientation ? 'Vertical' : 'Horizontal')}</span></div><div class="mt-6 grid grid-cols-2 border-t border-line pt-4 text-sm"><div><p class="text-xs text-slate-500">${isFolder ? 'CRUDs internos' : 'Colunas'}</p><p class="mt-1 font-semibold">${isFolder ? c.children || 0 : c.columns}</p></div><div class="border-l border-line pl-4"><p class="text-xs text-slate-500">${isFolder ? 'Tipo' : 'Registros'}</p><p class="mt-1 font-semibold">${isFolder ? 'Agrupador' : c.records}</p></div></div><div class="mt-5 ${isFolder ? '' : 'grid grid-cols-2 gap-2'}"><button ${isFolder ? `data-open-children="${c.id}"` : `data-open="${c.id}"`} class="w-full rounded-lg bg-violet px-3 py-2 text-sm font-semibold text-white hover:bg-violet-500">${isFolder ? 'Abrir CRUDs' : 'Abrir registros'}</button>${isFolder ? '' : `<button data-structure="${c.id}" class="rounded-lg border border-line px-3 py-2 text-sm font-semibold text-violet-200 hover:bg-violet/10">Colunas</button>`}</div></article>`; }).join('');
   document.querySelectorAll('[data-open]').forEach(button => button.onclick = () => openCrud(button.dataset.open));
   document.querySelectorAll('[data-open-children]').forEach(button => button.onclick = () => openChildren(button.dataset.openChildren));
   document.querySelectorAll('[data-structure]').forEach(button => button.onclick = () => crudStructure(button.dataset.structure));
+  document.querySelectorAll('[data-settings]').forEach(button => button.onclick = () => showCrudEditor(button.dataset.settings));
 }
 function setConnectionStatus(connected, detail = '') { databaseAvailable = connected; status.innerHTML = connected ? '<span class="h-2 w-2 rounded-full bg-emerald-400"></span> MySQL conectado' : `<span class="h-2 w-2 rounded-full bg-rose-400"></span> MySQL indisponível${detail ? `: ${escapeHtml(detail)}` : ''}`; document.querySelector('#newCrud').disabled = !connected; }
 async function loadCruds() { try { await request('health'); const payload = await request(`cruds${dashboardParent ? `?parent_id=${dashboardParent.id}` : ''}`); cruds = payload.cruds.map(c => ({ ...c, orientation: +c.orientation, type: +c.type, columns: +c.columns, records: +c.records, children: +c.children })); setConnectionStatus(true); } catch (error) { cruds = []; setConnectionStatus(false, error.message); } render(); }
@@ -99,8 +100,61 @@ function editOption(id) { const option = activeColumn.options.find(o => o.id ===
 function resetOptionForm() { editingOptionId = null; const form = document.querySelector('#optionForm'); form.reset(); form.position.value = 0; document.querySelector('#optionFormTitle').textContent = 'Adicionar opção'; document.querySelector('#saveOption').textContent = 'Adicionar opção'; document.querySelector('#cancelOptionEdit').classList.add('hidden'); }
 function backToDashboard() { document.querySelector('#recordsDetail').classList.add('hidden'); document.querySelector('#structureDetail').classList.add('hidden'); document.querySelector('#optionsDetail').classList.add('hidden'); document.querySelector('#dashboard').classList.remove('hidden'); loadCruds(); }
 
-const modal = document.querySelector('#modal'); const showModal = () => modal.classList.replace('hidden', 'flex'); const hideModal = () => modal.classList.replace('flex', 'hidden'); document.querySelector('#newCrud').onclick = showModal; document.querySelector('#closeModal').onclick = hideModal; document.querySelector('#cancel').onclick = hideModal;
-document.querySelector('#crudForm').onsubmit = async e => { e.preventDefault(); try { const name = document.querySelector('#crudName').value.trim(), orientation = +document.querySelector('input[name="orientation"]:checked').value, type = +document.querySelector('input[name="crudType"]:checked').value; if (!name) return; await request('cruds', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, orientation, type, parent_id: dashboardParent?.id ?? null }) }); hideModal(); e.target.reset(); loadCruds(); } catch (err) { alert(err.message); } };
+const modal = document.querySelector('#modal');
+function hideModal() { modal.classList.replace('flex', 'hidden'); }
+function showModal() {
+  editingCrudId = null;
+  const form = document.querySelector('#crudForm');
+  form.reset();
+  form.elements.orientation.value = '0';
+  form.elements.crudType.value = '0';
+  document.querySelector('#crudModalTitle').textContent = 'Criar novo CRUD';
+  document.querySelector('#crudModalDescription').textContent = 'Configure a estrutura inicial do seu cadastro.';
+  document.querySelector('#saveCrud').textContent = 'Criar estrutura';
+  document.querySelector('#deleteCrud').classList.add('hidden');
+  modal.classList.replace('hidden', 'flex');
+}
+function showCrudEditor(id) {
+  const crud = cruds.find(item => item.id === +id);
+  if (!crud) return;
+  editingCrudId = crud.id;
+  const form = document.querySelector('#crudForm');
+  form.querySelector('#crudName').value = crud.name;
+  form.elements.orientation.value = String(crud.orientation);
+  form.elements.crudType.value = String(crud.type);
+  document.querySelector('#crudModalTitle').textContent = 'Editar CRUD';
+  document.querySelector('#crudModalDescription').textContent = 'Altere o nome, a orientação ou o tipo desta estrutura.';
+  document.querySelector('#saveCrud').textContent = 'Salvar alterações';
+  document.querySelector('#deleteCrud').classList.remove('hidden');
+  modal.classList.replace('hidden', 'flex');
+}
+async function deleteCrud() {
+  if (!editingCrudId || !confirm('Excluir este CRUD? Registros vinculados a ele também serão removidos.')) return;
+  try {
+    await request(`cruds/${editingCrudId}`, { method: 'DELETE' });
+    hideModal();
+    editingCrudId = null;
+    loadCruds();
+  } catch (error) { alert(error.message); }
+}
+document.querySelector('#newCrud').onclick = showModal;
+document.querySelector('#closeModal').onclick = hideModal;
+document.querySelector('#cancel').onclick = hideModal;
+document.querySelector('#deleteCrud').onclick = deleteCrud;
+document.querySelector('#crudForm').onsubmit = async e => {
+  e.preventDefault();
+  try {
+    const name = document.querySelector('#crudName').value.trim(), orientation = +document.querySelector('input[name="orientation"]:checked').value, type = +document.querySelector('input[name="crudType"]:checked').value;
+    if (!name) return;
+    const path = editingCrudId ? `cruds/${editingCrudId}` : 'cruds';
+    const payload = { name, orientation, type };
+    if (!editingCrudId) payload.parent_id = dashboardParent?.id ?? null;
+    await request(path, { method: editingCrudId ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    hideModal();
+    editingCrudId = null;
+    loadCruds();
+  } catch (err) { alert(err.message); }
+};
 document.querySelector('#backToDashboard').onclick = backToDashboard; document.querySelector('#dashboardBack').onclick = backDashboardLevel; document.querySelectorAll('.backToDashboard').forEach(button => button.onclick = backToDashboard); document.querySelector('#newRecord').onclick = () => showRecordForm(); document.querySelector('#openStructureFromRecords').onclick = () => crudStructure(activeCrud.id); document.querySelector('#openRecordsFromStructure').onclick = () => openCrud(activeCrud.id); document.querySelector('#backToStructure').onclick = () => crudStructure(activeCrud.id); document.querySelector('#cancelColumnEdit').onclick = resetColumnForm; document.querySelector('#cancelOptionEdit').onclick = resetOptionForm;
 document.querySelector('#columnForm').onsubmit = async e => { e.preventDefault(); const data = new FormData(e.target), type = +data.get('type'); const url = `cruds/${activeCrud.id}/columns${editingColumnId ? `/${editingColumnId}` : ''}`; try { await request(url, { method: editingColumnId ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: data.get('name'), type, position: +data.get('position') }) }); resetColumnForm(); refreshStructure(); } catch (err) { alert(err.message); } };
 document.querySelector('#optionForm').onsubmit = async e => { e.preventDefault(); const data = new FormData(e.target); const url = `columns/${activeColumn.id}/options${editingOptionId ? `/${editingOptionId}` : ''}`; try { await request(url, { method: editingOptionId ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ value: data.get('value'), position: +data.get('position') }) }); await columnOptions(activeColumn.id); } catch (err) { alert(err.message); } };
