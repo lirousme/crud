@@ -44,7 +44,8 @@ Em servidores Apache/cPanel, o arquivo [`.htaccess`](.htaccess) aplica os mesmos
 
 ## Modelo de dados
 
-- `cruds`: `id`, `nome_do_crud` e `orientacao_colunas` (`INT`, padrão `0`). A orientação `0` mantém as colunas na horizontal e os registros na vertical; a orientação `1` deixa as colunas na vertical e os registros na horizontal.
+- `cruds`: `id`, `nome_do_crud`, `orientacao_colunas` (`INT`, padrão `0`) e `type` (`INT`, padrão `0`). O tipo `0` é um CRUD simples; o tipo `1` é um CRUD de CRUDs. A orientação `0` mantém as colunas na horizontal e os registros na vertical; a orientação `1` deixa as colunas na vertical e os registros na horizontal.
+- `cruds_de_cruds`: `id`, `id_crud_father` e `id_crud_son`; relaciona um CRUD de CRUDs aos CRUDs internos.
 - `registros_do_crud`: `id` e `id_crud`.
 - `colunas`: `id`, `nome_da_coluna`, `tipo` (`INT`, padrão `0`) e `ordem` (`INT`).
 - `cruds_colunas`: `id`, `id_crud` e `id_coluna`; permite que uma mesma coluna pertença a mais de um CRUD.
@@ -61,7 +62,7 @@ Os valores das colunas do tipo `0` são texto, das colunas do tipo `1` são num�
 
 Abra a aplicação pelo servidor PHP. A interface usa Tailwind CSS em modo escuro e consulta o MySQL de verdade: antes de carregar a lista ela verifica a conexão em uma rota própria, sem cache. O status de conexão, os contadores e a lista vêm do banco. Um novo CRUD só é exibido depois de ser inserido na tabela `cruds`; quando o banco estiver indisponível, a interface informa isso e não exibe dados de demonstração.
 
-Cada card de CRUD oferece dois acessos: **Abrir registros**, para adicionar, editar e remover registros, e **Colunas**, para administrar a estrutura de colunas separadamente. Colunas de seleção (tipo `2`) têm um acesso **Opções** próprio: nele é possível adicionar, editar e remover as opções, sem incluí-las no formulário da estrutura. Ao editar um registro, deixar um campo em branco remove o valor correspondente do banco de dados.
+Cada card de CRUD simples oferece dois acessos: **Abrir registros**, para adicionar, editar e remover registros, e **Colunas**, para administrar a estrutura de colunas separadamente. Um card do tipo **CRUD de CRUDs** abre a lista dos seus CRUDs internos; nessa lista é possível criar CRUDs simples ou novos CRUDs de CRUDs, em qualquer nível de aninhamento. Colunas de seleção (tipo `2`) têm um acesso **Opções** próprio: nele é possível adicionar, editar e remover as opções, sem incluí-las no formulário da estrutura. Ao editar um registro, deixar um campo em branco remove o valor correspondente do banco de dados.
 
 ### Tabela de registros
 
