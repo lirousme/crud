@@ -40,7 +40,7 @@
         <section id="recordsDetail" class="hidden w-full p-5 pb-12 md:p-9 md:pb-14">
           <button id="backToDashboard" class="mb-6 text-sm font-medium text-violet-300 hover:text-violet-200">← Voltar para meus CRUDs</button>
           <div class="mb-7 flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p class="text-xs text-slate-500">Registros do CRUD</p><h2 id="recordsTitle" class="mt-1 text-2xl font-bold text-white"></h2><p id="recordsDescription" class="mt-1 text-sm text-slate-500"></p></div><div class="flex gap-3"><button id="openStructureFromRecords" class="rounded-lg border border-line px-4 py-2.5 text-sm font-semibold text-violet-200 hover:bg-violet/10">Gerenciar colunas</button><button id="newRecord" class="rounded-lg bg-violet px-4 py-2.5 text-sm font-semibold text-white">+ Novo registro</button></div></div>
-          <div class="overflow-hidden rounded-xl border border-line bg-panel"><div id="recordsTableViewport" class="overflow-x-auto"><table id="recordsTable" class="w-full border-collapse"></table></div></div>
+          <div class="overflow-hidden rounded-xl border border-line bg-panel"><div id="recordsTableViewport" class="overflow-x-auto"><table id="recordsTable" class="min-w-full border-collapse"></table></div></div>
         </section>
         <section id="structureDetail" class="hidden mx-auto max-w-7xl p-5 md:p-9">
           <button class="backToDashboard mb-6 text-sm font-medium text-violet-300 hover:text-violet-200">← Voltar para meus CRUDs</button>
@@ -55,7 +55,7 @@
       </main>
     </div>
 
-    <div id="recordsHorizontalScrollbar" class="fixed inset-x-0 bottom-0 z-10 hidden border-t border-line bg-panel/95 px-5 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_rgba(0,0,0,.18)] backdrop-blur lg:left-64 md:px-9" aria-label="Barra de rolagem horizontal da tabela">
+    <div id="recordsHorizontalScrollbar" class="fixed inset-x-0 bottom-0 z-10 hidden border-t border-line bg-panel/95 px-5 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_rgba(0,0,0,.18)] backdrop-blur md:px-9" role="region" aria-label="Barra de rolagem horizontal fixa da tabela" aria-controls="recordsTableViewport">
       <div id="recordsHorizontalScrollbarTrack" class="h-5 overflow-x-scroll overflow-y-hidden"><div id="recordsHorizontalScrollbarContent" class="h-px"></div></div>
     </div>
 

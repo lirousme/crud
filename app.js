@@ -39,8 +39,14 @@ function updateRecordsHorizontalScrollbar() {
   if (!activeCrud || document.querySelector('#recordsDetail').classList.contains('hidden')) return;
   const hasOverflow = recordsTableViewport.scrollWidth > recordsTableViewport.clientWidth;
   recordsHorizontalScrollbar.classList.toggle('hidden', !hasOverflow);
-  if (!hasOverflow) return;
-  recordsHorizontalScrollbarContent.style.width = `${recordsTableViewport.scrollWidth}px`;
+  if (!hasOverflow) {
+    recordsHorizontalScrollbarContent.style.width = '';
+    return;
+  }
+  // The fixed track is viewport-wide, while the table viewport may be narrower.
+  // Match their scrollable distances so the scroll positions stay in sync.
+  const tableScrollRange = recordsTableViewport.scrollWidth - recordsTableViewport.clientWidth;
+  recordsHorizontalScrollbarContent.style.width = `${recordsHorizontalScrollbarTrack.clientWidth + tableScrollRange}px`;
   if (!syncingRecordsScroll) recordsHorizontalScrollbarTrack.scrollLeft = recordsTableViewport.scrollLeft;
 }
 function syncRecordsScroll(source, destination) {
