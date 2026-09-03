@@ -65,7 +65,7 @@ Cada card de CRUD oferece dois acessos: **Abrir registros**, para adicionar, edi
 
 ### Tabela de registros
 
-A tela de registros utiliza toda a largura disponível da área principal, sem o limite de largura aplicado às demais telas. Quando a tabela for mais larga que a área visível, a barra com o ID `recordsHorizontalScrollbar` permanece fixa no **viewport** — na parte inferior da tela inteira do monitor, e não no fim ou somente dentro da área da tabela. Essa barra é sincronizada com a rolagem da tabela e mantém a mesma distância de rolagem, portanto pode ser usada para navegar horizontalmente por qualquer coluna mesmo quando o usuário estiver visualizando qualquer linha dos registros.
+A tela de registros utiliza toda a largura disponível da área principal, sem o limite de largura aplicado às demais telas. Quando a tabela for mais larga que a área visível, ela amplia a área rolável do documento: a navegação horizontal acontece exclusivamente pela barra da **viewport**, sem uma barra de rolagem própria dentro da tabela. As barras de rolagem da viewport têm acabamento espesso, em tons de violeta e com trilho escuro, para uma aparência inspirada em interfaces de games.
 
 Se o servidor ou MySQL não responder em até 10 segundos, a interface troca o estado de **Verificando MySQL…** por uma mensagem de indisponibilidade e desabilita a criação de CRUDs. A mensagem agora identifica falhas comuns de configuração e conexão; confira se o `.env` está no mesmo diretório de `api.php`, se o usuário tem acesso ao banco definido em `MYSQL_DATABASE` e se o schema foi importado.
 

@@ -18,7 +18,7 @@ $appVersion = hash_file('sha256', __DIR__ . '/app.js');
       tailwind.config = { darkMode: 'class', theme: { extend: { colors: { ink: '#0b1020', panel: '#11182a', line: '#24304a', violet: '#8b5cf6' } } } }
     </script>
   </head>
-  <body class="min-h-screen bg-ink text-slate-200 antialiased">
+  <body class="min-h-screen overflow-x-auto bg-ink text-slate-200 antialiased">
     <div class="flex min-h-screen">
       <aside class="hidden w-64 flex-col border-r border-line bg-[#0d1424] p-5 lg:flex">
         <a class="mb-10 flex items-center gap-3 text-xl font-bold tracking-tight" href="#">
@@ -46,10 +46,10 @@ $appVersion = hash_file('sha256', __DIR__ . '/app.js');
           <div class="mb-7 grid gap-4 sm:grid-cols-3"><div class="rounded-xl border border-line bg-panel p-4"><p class="text-xs font-medium uppercase tracking-wider text-slate-500">CRUDs ativos</p><p id="crudCount" class="mt-2 text-2xl font-bold text-white">0</p></div><div class="rounded-xl border border-line bg-panel p-4"><p class="text-xs font-medium uppercase tracking-wider text-slate-500">Registros totais</p><p id="recordCount" class="mt-2 text-2xl font-bold text-white">0</p></div><div class="rounded-xl border border-line bg-panel p-4"><p class="text-xs font-medium uppercase tracking-wider text-slate-500">Colunas compartilhadas</p><p id="columnCount" class="mt-2 text-2xl font-bold text-white">0</p></div></div>
           <div id="crudList" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3"></div>
         </section>
-        <section id="recordsDetail" class="hidden w-full p-5 pb-12 md:p-9 md:pb-14">
+        <section id="recordsDetail" class="hidden min-w-full w-max p-5 pb-12 md:p-9 md:pb-14">
           <button id="backToDashboard" class="mb-6 text-sm font-medium text-violet-300 hover:text-violet-200">← Voltar para meus CRUDs</button>
           <div class="mb-7 flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p class="text-xs text-slate-500">Registros do CRUD</p><h2 id="recordsTitle" class="mt-1 text-2xl font-bold text-white"></h2><p id="recordsDescription" class="mt-1 text-sm text-slate-500"></p></div><div class="flex gap-3"><button id="openStructureFromRecords" class="rounded-lg border border-line px-4 py-2.5 text-sm font-semibold text-violet-200 hover:bg-violet/10">Gerenciar colunas</button><button id="newRecord" class="rounded-lg bg-violet px-4 py-2.5 text-sm font-semibold text-white">+ Novo registro</button></div></div>
-          <div class="overflow-hidden rounded-xl border border-line bg-panel"><div id="recordsTableViewport" class="overflow-x-auto"><table id="recordsTable" class="min-w-full border-collapse"></table></div></div>
+          <div class="w-max min-w-full rounded-xl border border-line bg-panel"><table id="recordsTable" class="min-w-full border-collapse"></table></div>
         </section>
         <section id="structureDetail" class="hidden mx-auto max-w-7xl p-5 md:p-9">
           <button class="backToDashboard mb-6 text-sm font-medium text-violet-300 hover:text-violet-200">← Voltar para meus CRUDs</button>
@@ -64,15 +64,19 @@ $appVersion = hash_file('sha256', __DIR__ . '/app.js');
       </main>
     </div>
 
-    <div id="recordsHorizontalScrollbar" class="fixed inset-x-0 bottom-0 z-10 hidden border-t border-line bg-panel/95 px-5 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_rgba(0,0,0,.18)] backdrop-blur md:px-9" role="region" aria-label="Barra de rolagem horizontal fixa da tabela" aria-controls="recordsTableViewport">
-      <div id="recordsHorizontalScrollbarTrack" class="h-5 overflow-x-scroll overflow-y-hidden"><div id="recordsHorizontalScrollbarContent" class="h-px"></div></div>
-    </div>
-
     <div id="modal" class="fixed inset-0 z-20 hidden items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm">
       <form id="crudForm" class="w-full max-w-lg rounded-2xl border border-line bg-[#11182a] p-6 shadow-2xl"><div class="mb-6 flex items-start justify-between"><div><h2 class="text-xl font-bold text-white">Criar novo CRUD</h2><p class="mt-1 text-sm text-slate-500">Configure a estrutura inicial do seu cadastro.</p></div><button type="button" id="closeModal" class="text-xl text-slate-500 hover:text-white">×</button></div><label class="block text-sm font-medium text-slate-300">Nome do CRUD<input required id="crudName" class="mt-2 w-full rounded-lg border border-line bg-[#0b1020] px-3 py-2.5 outline-none focus:border-violet" placeholder="Ex.: Fornecedores" /></label><fieldset class="mt-5"><legend class="text-sm font-medium text-slate-300">Orientação das colunas</legend><div class="mt-2 grid grid-cols-2 gap-3"><label class="cursor-pointer rounded-lg border border-violet bg-violet/10 p-3"><input checked type="radio" name="orientation" value="0" class="accent-violet" /> <span class="ml-1 text-sm font-medium">Horizontal</span><small class="mt-1 block text-xs text-slate-500">Registros em linhas</small></label><label class="cursor-pointer rounded-lg border border-line p-3"><input type="radio" name="orientation" value="1" class="accent-violet" /> <span class="ml-1 text-sm font-medium">Vertical</span><small class="mt-1 block text-xs text-slate-500">Registros em colunas</small></label></div></fieldset><div class="mt-6 flex justify-end gap-3"><button type="button" id="cancel" class="rounded-lg px-4 py-2 text-sm text-slate-400">Cancelar</button><button class="rounded-lg bg-violet px-4 py-2 text-sm font-semibold text-white">Criar estrutura</button></div></form>
     </div>
     <div id="recordModal" class="fixed inset-0 z-30 hidden items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm"><div class="w-full max-w-lg rounded-2xl border border-line bg-panel p-6"><h2 id="recordFormTitle" class="mb-5 text-xl font-bold text-white"></h2><form id="recordForm" class="space-y-4"></form></div></div>
-    <style>.input{margin-top:.45rem;width:100%;border-radius:.5rem;border:1px solid #24304a;background:#0b1020;padding:.6rem .75rem;color:#e2e8f0;outline:none}.input:focus{border-color:#8b5cf6}</style>
+    <style>
+      html { scrollbar-color: #a78bfa #11182a; scrollbar-width: auto; }
+      ::-webkit-scrollbar { width: 18px; height: 18px; }
+      ::-webkit-scrollbar-track { background: #11182a; border: 3px solid #0b1020; }
+      ::-webkit-scrollbar-thumb { min-height: 64px; border: 3px solid #11182a; border-radius: 999px; background: linear-gradient(135deg, #c4b5fd, #7c3aed); box-shadow: inset 0 0 0 1px #ddd6fe, 0 0 10px rgb(139 92 246 / .6); }
+      ::-webkit-scrollbar-thumb:hover { background: linear-gradient(135deg, #ddd6fe, #8b5cf6); }
+      ::-webkit-scrollbar-corner { background: #0b1020; }
+      .input{margin-top:.45rem;width:100%;border-radius:.5rem;border:1px solid #24304a;background:#0b1020;padding:.6rem .75rem;color:#e2e8f0;outline:none}.input:focus{border-color:#8b5cf6}
+    </style>
     <script src="app.js?v=<?= rawurlencode($appVersion) ?>"></script>
   </body>
 </html>
