@@ -8,7 +8,19 @@ CREATE TABLE cruds (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   nome_do_crud VARCHAR(150) NOT NULL,
   orientacao_colunas TINYINT NOT NULL DEFAULT 0 COMMENT '0: horizontal; 1: vertical',
-  CHECK (orientacao_colunas IN (0, 1))
+  type TINYINT NOT NULL DEFAULT 0 COMMENT '0: CRUD simples; 1: CRUD de CRUDs',
+  CHECK (orientacao_colunas IN (0, 1)),
+  CHECK (type IN (0, 1))
+) ENGINE=InnoDB;
+
+CREATE TABLE cruds_de_cruds (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  id_crud_father BIGINT UNSIGNED NOT NULL,
+  id_crud_son BIGINT UNSIGNED NOT NULL,
+  UNIQUE KEY uq_crud_father_son (id_crud_father, id_crud_son),
+  UNIQUE KEY uq_crud_son (id_crud_son),
+  CONSTRAINT fk_cruds_de_cruds_father FOREIGN KEY (id_crud_father) REFERENCES cruds(id) ON DELETE CASCADE,
+  CONSTRAINT fk_cruds_de_cruds_son FOREIGN KEY (id_crud_son) REFERENCES cruds(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 CREATE TABLE registros_do_crud (

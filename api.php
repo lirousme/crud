@@ -35,7 +35,7 @@ function databaseError(Throwable $error): string {
     return 'Não foi possível concluir a operação no MySQL. Consulte o log de erros do PHP para mais detalhes.';
 }
 function crud(PDO $db, int $id): array {
-    $query = $db->prepare('SELECT id, nome_do_crud AS name, orientacao_colunas AS orientation FROM cruds WHERE id = ?');
+    $query = $db->prepare('SELECT id, nome_do_crud AS name, orientacao_colunas AS orientation, type FROM cruds WHERE id = ?');
     $query->execute([$id]); $crud = $query->fetch(PDO::FETCH_ASSOC);
     if (!$crud) respond(404, ['error' => 'CRUD não encontrado.']);
     return $crud;
@@ -113,13 +113,29 @@ try {
         respond(405, ['error' => 'Método não permitido.']);
     }
     if (($parts[0] ?? '') !== 'cruds') respond(404, ['error' => 'Rota não encontrada.']);
-    if (count($parts) === 1 && $method === 'GET') { $statement = $db->query('SELECT c.id, c.nome_do_crud AS name, c.orientacao_colunas AS orientation, COUNT(DISTINCT cc.id_coluna) AS columns, COUNT(DISTINCT r.id) AS records FROM cruds c LEFT JOIN cruds_colunas cc ON cc.id_crud = c.id LEFT JOIN registros_do_crud r ON r.id_crud = c.id GROUP BY c.id ORDER BY c.id DESC'); respond(200, ['cruds' => $statement->fetchAll(PDO::FETCH_ASSOC)]); }
-    if (count($parts) === 1 && $method === 'POST') { $data = input(); $name = trim((string) ($data['name'] ?? '')); $orientation = $data['orientation'] ?? null; if ($name === '' || mb_strlen($name) > 150 || !in_array($orientation, [0, 1], true)) respond(422, ['error' => 'Nome ou orientação inválidos.']); $statement = $db->prepare('INSERT INTO cruds (nome_do_crud, orientacao_colunas) VALUES (?, ?)'); $statement->execute([$name, $orientation]); $created = crud($db, (int) $db->lastInsertId()); $created['orientation'] = (int) $created['orientation']; $created['columns'] = 0; $created['records'] = 0; respond(201, ['crud' => $created]); }
+    if (count($parts) === 1 && $method === 'GET') {
+        $parentId = $_GET['parent_id'] ?? null;
+        if ($parentId === null || $parentId === '') {
+            $statement = $db->query('SELECT c.id, c.nome_do_crud AS name, c.orientacao_colunas AS orientation, c.type, COUNT(DISTINCT cc.id_coluna) AS columns, COUNT(DISTINCT r.id) AS records, COUNT(DISTINCT child.id_crud_son) AS children FROM cruds c LEFT JOIN cruds_de_cruds link ON link.id_crud_son = c.id LEFT JOIN cruds_de_cruds child ON child.id_crud_father = c.id LEFT JOIN cruds_colunas cc ON cc.id_crud = c.id LEFT JOIN registros_do_crud r ON r.id_crud = c.id WHERE link.id IS NULL GROUP BY c.id ORDER BY c.id DESC');
+        } else {
+            $parentId = filter_var($parentId, FILTER_VALIDATE_INT); if (!$parentId) respond(404, ['error' => 'CRUD pai não encontrado.']);
+            $parent = crud($db, $parentId); if ((int) $parent['type'] !== 1) respond(422, ['error' => 'Apenas CRUDs de CRUDs podem possuir CRUDs internos.']);
+            $statement = $db->prepare('SELECT c.id, c.nome_do_crud AS name, c.orientacao_colunas AS orientation, c.type, COUNT(DISTINCT cc.id_coluna) AS columns, COUNT(DISTINCT r.id) AS records, COUNT(DISTINCT child.id_crud_son) AS children FROM cruds_de_cruds link JOIN cruds c ON c.id = link.id_crud_son LEFT JOIN cruds_colunas cc ON cc.id_crud = c.id LEFT JOIN registros_do_crud r ON r.id_crud = c.id LEFT JOIN cruds_de_cruds child ON child.id_crud_father = c.id WHERE link.id_crud_father = ? GROUP BY c.id ORDER BY c.id DESC'); $statement->execute([$parentId]);
+        }
+        respond(200, ['cruds' => $statement->fetchAll(PDO::FETCH_ASSOC)]);
+    }
+    if (count($parts) === 1 && $method === 'POST') {
+        $data = input(); $name = trim((string) ($data['name'] ?? '')); $orientation = $data['orientation'] ?? null; $type = $data['type'] ?? 0; $parentId = $data['parent_id'] ?? null;
+        if ($name === '' || mb_strlen($name) > 150 || !in_array($orientation, [0, 1], true) || !in_array($type, [0, 1], true)) respond(422, ['error' => 'Dados do CRUD inválidos.']);
+        if ($parentId !== null) { $parentId = filter_var($parentId, FILTER_VALIDATE_INT); if (!$parentId) respond(422, ['error' => 'CRUD pai inválido.']); $parent = crud($db, $parentId); if ((int) $parent['type'] !== 1) respond(422, ['error' => 'O CRUD pai precisa ser do tipo CRUD de CRUDs.']); }
+        $db->beginTransaction(); $statement = $db->prepare('INSERT INTO cruds (nome_do_crud, orientacao_colunas, type) VALUES (?, ?, ?)'); $statement->execute([$name, $orientation, $type]); $id = (int) $db->lastInsertId(); if ($parentId !== null) $db->prepare('INSERT INTO cruds_de_cruds (id_crud_father, id_crud_son) VALUES (?, ?)')->execute([$parentId, $id]); $db->commit();
+        $created = crud($db, $id); $created['orientation'] = (int) $created['orientation']; $created['type'] = (int) $created['type']; $created['columns'] = 0; $created['records'] = 0; $created['children'] = 0; respond(201, ['crud' => $created]);
+    }
     $crudId = filter_var($parts[1] ?? null, FILTER_VALIDATE_INT); if (!$crudId) respond(404, ['error' => 'CRUD não encontrado.']); $entity = $parts[2] ?? '';
-    if ($entity === '' && $method === 'GET') { $item = crud($db, $crudId); $item['orientation'] = (int) $item['orientation']; $item['columns'] = columns($db, $crudId); $item['records'] = records($db, $crudId); respond(200, ['crud' => $item]); }
-    if ($entity === 'columns' && $method === 'GET') { $item = crud($db, $crudId); $item['orientation'] = (int) $item['orientation']; $item['columns'] = columns($db, $crudId); respond(200, ['crud' => $item]); }
-    if ($entity === 'records' && $method === 'GET') { $item = crud($db, $crudId); $item['orientation'] = (int) $item['orientation']; $item['columns'] = columns($db, $crudId); $item['records'] = records($db, $crudId); respond(200, ['crud' => $item]); }
-    if ($entity === 'columns' && $method === 'POST') { crud($db, $crudId); $data = input(); $name = trim((string) ($data['name'] ?? '')); $type = $data['type'] ?? null; $position = $data['position'] ?? 0; if ($name === '' || !in_array($type, [0, 1, 2], true) || filter_var($position, FILTER_VALIDATE_INT) === false) respond(422, ['error' => 'Dados da coluna inválidos.']); $db->beginTransaction(); $db->prepare('INSERT INTO colunas (nome_da_coluna, tipo, ordem) VALUES (?, ?, ?)')->execute([$name, $type, $position]); $columnId = (int) $db->lastInsertId(); $db->prepare('INSERT INTO cruds_colunas (id_crud, id_coluna) VALUES (?, ?)')->execute([$crudId, $columnId]); $db->commit(); respond(201, ['column' => ['id' => $columnId, 'name' => $name, 'type' => $type, 'position' => (int) $position, 'options' => []]]); }
+    if ($entity === '' && $method === 'GET') { $item = crud($db, $crudId); $item['orientation'] = (int) $item['orientation']; $item['type'] = (int) $item['type']; $item['columns'] = columns($db, $crudId); $item['records'] = records($db, $crudId); respond(200, ['crud' => $item]); }
+    if ($entity === 'columns' && $method === 'GET') { $item = crud($db, $crudId); $item['orientation'] = (int) $item['orientation']; $item['type'] = (int) $item['type']; $item['columns'] = columns($db, $crudId); respond(200, ['crud' => $item]); }
+    if ($entity === 'records' && $method === 'GET') { $item = crud($db, $crudId); $item['orientation'] = (int) $item['orientation']; $item['type'] = (int) $item['type']; $item['columns'] = columns($db, $crudId); $item['records'] = records($db, $crudId); respond(200, ['crud' => $item]); }
+    if ($entity === 'columns' && $method === 'POST') { if ((int) crud($db, $crudId)['type'] === 1) respond(422, ['error' => 'CRUDs de CRUDs não possuem colunas.']); $data = input(); $name = trim((string) ($data['name'] ?? '')); $type = $data['type'] ?? null; $position = $data['position'] ?? 0; if ($name === '' || !in_array($type, [0, 1, 2], true) || filter_var($position, FILTER_VALIDATE_INT) === false) respond(422, ['error' => 'Dados da coluna inválidos.']); $db->beginTransaction(); $db->prepare('INSERT INTO colunas (nome_da_coluna, tipo, ordem) VALUES (?, ?, ?)')->execute([$name, $type, $position]); $columnId = (int) $db->lastInsertId(); $db->prepare('INSERT INTO cruds_colunas (id_crud, id_coluna) VALUES (?, ?)')->execute([$crudId, $columnId]); $db->commit(); respond(201, ['column' => ['id' => $columnId, 'name' => $name, 'type' => $type, 'position' => (int) $position, 'options' => []]]); }
     if ($entity === 'columns' && isset($parts[3]) && $method === 'PATCH') {
         $columnId = filter_var($parts[3], FILTER_VALIDATE_INT); crud($db, $crudId);
         $belongs = $db->prepare('SELECT c.id, c.tipo FROM colunas c JOIN cruds_colunas cc ON cc.id_coluna = c.id WHERE cc.id_crud = ? AND c.id = ?');
@@ -135,7 +151,7 @@ try {
         $db->commit(); respond(200, ['column' => columns($db, $crudId)]);
     }
     if ($entity === 'columns' && isset($parts[3]) && $method === 'DELETE') { $columnId = (int) $parts[3]; crud($db, $crudId); $db->prepare('DELETE FROM cruds_colunas WHERE id_crud = ? AND id_coluna = ?')->execute([$crudId, $columnId]); respond(204, []); }
-    if ($entity === 'records' && $method === 'POST') { crud($db, $crudId); $db->beginTransaction(); $db->prepare('INSERT INTO registros_do_crud (id_crud) VALUES (?)')->execute([$crudId]); $recordId = (int) $db->lastInsertId(); saveValues($db, $recordId, columns($db, $crudId), input()['values'] ?? []); $db->commit(); respond(201, ['id' => $recordId]); }
+    if ($entity === 'records' && $method === 'POST') { if ((int) crud($db, $crudId)['type'] === 1) respond(422, ['error' => 'CRUDs de CRUDs não possuem registros.']); $db->beginTransaction(); $db->prepare('INSERT INTO registros_do_crud (id_crud) VALUES (?)')->execute([$crudId]); $recordId = (int) $db->lastInsertId(); saveValues($db, $recordId, columns($db, $crudId), input()['values'] ?? []); $db->commit(); respond(201, ['id' => $recordId]); }
     if ($entity === 'records' && isset($parts[3]) && $method === 'PATCH') { $recordId = (int) $parts[3]; $check = $db->prepare('SELECT id FROM registros_do_crud WHERE id = ? AND id_crud = ?'); $check->execute([$recordId, $crudId]); if (!$check->fetch()) respond(404, ['error' => 'Registro não encontrado.']); $db->beginTransaction(); saveValues($db, $recordId, columns($db, $crudId), input()['values'] ?? []); $db->commit(); respond(200, ['id' => $recordId]); }
     if ($entity === 'records' && isset($parts[3]) && $method === 'DELETE') { $db->prepare('DELETE FROM registros_do_crud WHERE id = ? AND id_crud = ?')->execute([(int) $parts[3], $crudId]); respond(204, []); }
     respond(405, ['error' => 'Método não permitido.']);
