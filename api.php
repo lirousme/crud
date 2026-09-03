@@ -133,6 +133,26 @@ try {
     }
     $crudId = filter_var($parts[1] ?? null, FILTER_VALIDATE_INT); if (!$crudId) respond(404, ['error' => 'CRUD não encontrado.']); $entity = $parts[2] ?? '';
     if ($entity === '' && $method === 'GET') { $item = crud($db, $crudId); $item['orientation'] = (int) $item['orientation']; $item['type'] = (int) $item['type']; $item['columns'] = columns($db, $crudId); $item['records'] = records($db, $crudId); respond(200, ['crud' => $item]); }
+    if ($entity === '' && $method === 'PATCH') {
+        $current = crud($db, $crudId); $data = input(); $name = trim((string) ($data['name'] ?? '')); $orientation = $data['orientation'] ?? null; $type = $data['type'] ?? null;
+        if ($name === '' || mb_strlen($name) > 150 || !in_array($orientation, [0, 1], true) || !in_array($type, [0, 1], true)) respond(422, ['error' => 'Dados do CRUD inválidos.']);
+        if ((int) $current['type'] !== (int) $type && (int) $type === 1) {
+            $hasData = $db->prepare('SELECT EXISTS(SELECT 1 FROM cruds_colunas WHERE id_crud = ?) OR EXISTS(SELECT 1 FROM registros_do_crud WHERE id_crud = ?)');
+            $hasData->execute([$crudId, $crudId]);
+            if ((int) $hasData->fetchColumn()) respond(409, ['error' => 'Não é possível transformar este CRUD em CRUD de CRUDs enquanto ele possuir colunas ou registros.']);
+        }
+        if ((int) $current['type'] !== (int) $type && (int) $type === 0) {
+            $hasChildren = $db->prepare('SELECT EXISTS(SELECT 1 FROM cruds_de_cruds WHERE id_crud_father = ?)'); $hasChildren->execute([$crudId]);
+            if ((int) $hasChildren->fetchColumn()) respond(409, ['error' => 'Não é possível transformar este CRUD em simples enquanto ele possuir CRUDs internos.']);
+        }
+        $db->prepare('UPDATE cruds SET nome_do_crud = ?, orientacao_colunas = ?, type = ? WHERE id = ?')->execute([$name, $orientation, $type, $crudId]);
+        $updated = crud($db, $crudId); $updated['orientation'] = (int) $updated['orientation']; $updated['type'] = (int) $updated['type']; respond(200, ['crud' => $updated]);
+    }
+    if ($entity === '' && $method === 'DELETE') {
+        crud($db, $crudId);
+        $db->prepare('DELETE FROM cruds WHERE id = ?')->execute([$crudId]);
+        respond(204, []);
+    }
     if ($entity === 'columns' && $method === 'GET') { $item = crud($db, $crudId); $item['orientation'] = (int) $item['orientation']; $item['type'] = (int) $item['type']; $item['columns'] = columns($db, $crudId); respond(200, ['crud' => $item]); }
     if ($entity === 'records' && $method === 'GET') { $item = crud($db, $crudId); $item['orientation'] = (int) $item['orientation']; $item['type'] = (int) $item['type']; $item['columns'] = columns($db, $crudId); $item['records'] = records($db, $crudId); respond(200, ['crud' => $item]); }
     if ($entity === 'columns' && $method === 'POST') { if ((int) crud($db, $crudId)['type'] === 1) respond(422, ['error' => 'CRUDs de CRUDs não possuem colunas.']); $data = input(); $name = trim((string) ($data['name'] ?? '')); $type = $data['type'] ?? null; $position = $data['position'] ?? 0; if ($name === '' || !in_array($type, [0, 1, 2], true) || filter_var($position, FILTER_VALIDATE_INT) === false) respond(422, ['error' => 'Dados da coluna inválidos.']); $db->beginTransaction(); $db->prepare('INSERT INTO colunas (nome_da_coluna, tipo, ordem) VALUES (?, ?, ?)')->execute([$name, $type, $position]); $columnId = (int) $db->lastInsertId(); $db->prepare('INSERT INTO cruds_colunas (id_crud, id_coluna) VALUES (?, ?)')->execute([$crudId, $columnId]); $db->commit(); respond(201, ['column' => ['id' => $columnId, 'name' => $name, 'type' => $type, 'position' => (int) $position, 'options' => []]]); }
