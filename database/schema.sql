@@ -34,7 +34,9 @@ CREATE TABLE colunas (
   nome_da_coluna VARCHAR(150) NOT NULL,
   tipo TINYINT NOT NULL DEFAULT 0 COMMENT '0: texto; 1: número; 2: select',
   ordem INT NOT NULL,
-  CHECK (tipo IN (0, 1, 2))
+  aceita_valor_igual TINYINT NOT NULL DEFAULT 1 COMMENT '1: permite valores repetidos; 0: exige valor único',
+  CHECK (tipo IN (0, 1, 2)),
+  CHECK (aceita_valor_igual IN (0, 1))
 ) ENGINE=InnoDB;
 
 CREATE TABLE cruds_colunas (

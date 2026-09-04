@@ -41,18 +41,18 @@ function crud(PDO $db, int $id): array {
     return $crud;
 }
 function columns(PDO $db, int $crudId): array {
-    $query = $db->prepare('SELECT c.id, c.nome_da_coluna AS name, c.tipo AS type, c.ordem AS position FROM colunas c JOIN cruds_colunas cc ON cc.id_coluna = c.id WHERE cc.id_crud = ? ORDER BY c.ordem, c.id');
+    $query = $db->prepare('SELECT c.id, c.nome_da_coluna AS name, c.tipo AS type, c.ordem AS position, c.aceita_valor_igual AS allow_duplicates FROM colunas c JOIN cruds_colunas cc ON cc.id_coluna = c.id WHERE cc.id_crud = ? ORDER BY c.ordem, c.id');
     $query->execute([$crudId]); $columns = $query->fetchAll(PDO::FETCH_ASSOC);
     $options = $db->prepare('SELECT id, valor_da_opcao AS value, tipo, ordem AS position FROM opcoes_colunas WHERE id_coluna = ? ORDER BY ordem, id');
-    foreach ($columns as &$column) { $column['type'] = (int) $column['type']; $column['position'] = (int) $column['position']; $options->execute([$column['id']]); $column['options'] = $options->fetchAll(PDO::FETCH_ASSOC); }
+    foreach ($columns as &$column) { $column['type'] = (int) $column['type']; $column['position'] = (int) $column['position']; $column['allow_duplicates'] = (bool) $column['allow_duplicates']; $options->execute([$column['id']]); $column['options'] = $options->fetchAll(PDO::FETCH_ASSOC); }
     return $columns;
 }
 function selectionColumn(PDO $db, int $columnId): array {
-    $query = $db->prepare('SELECT id, nome_da_coluna AS name, tipo AS type, ordem AS position FROM colunas WHERE id = ?');
+    $query = $db->prepare('SELECT id, nome_da_coluna AS name, tipo AS type, ordem AS position, aceita_valor_igual AS allow_duplicates FROM colunas WHERE id = ?');
     $query->execute([$columnId]); $column = $query->fetch(PDO::FETCH_ASSOC);
     if (!$column) respond(404, ['error' => 'Coluna não encontrada.']);
     if ((int) $column['type'] !== 2) respond(422, ['error' => 'Apenas colunas de seleção possuem opções.']);
-    $column['type'] = (int) $column['type']; $column['position'] = (int) $column['position'];
+    $column['type'] = (int) $column['type']; $column['position'] = (int) $column['position']; $column['allow_duplicates'] = (bool) $column['allow_duplicates'];
     $options = $db->prepare('SELECT id, valor_da_opcao AS value, ordem AS position FROM opcoes_colunas WHERE id_coluna = ? ORDER BY ordem, id');
     $options->execute([$columnId]); $column['options'] = $options->fetchAll(PDO::FETCH_ASSOC);
     foreach ($column['options'] as &$option) $option['position'] = (int) $option['position'];
@@ -64,7 +64,7 @@ function records(PDO $db, int $crudId): array {
     foreach ($query->fetchAll(PDO::FETCH_ASSOC) as $row) { $id = (int) $row['id']; if (!isset($output[$id])) $output[$id] = ['id' => $id, 'values' => []]; $output[$id]['values'][(string) $row['column_id']] = $row['value']; }
     return array_values($output);
 }
-function saveValues(PDO $db, int $recordId, array $columns, array $values): void {
+function saveValues(PDO $db, int $crudId, int $recordId, array $columns, array $values): void {
     foreach ($columns as $column) {
         $key = (string) $column['id']; $value = $values[$key] ?? $values[(int) $column['id']] ?? null;
         $type = (int) $column['type'];
@@ -78,6 +78,11 @@ function saveValues(PDO $db, int $recordId, array $columns, array $values): void
         if ($type === 0) { $value = (string) $value; }
         elseif ($type === 1) { if (filter_var($value, FILTER_VALIDATE_INT) === false) respond(422, ['error' => "{$column['name']} deve ser um número inteiro."]); $table = 'c_um_valores'; $value = (int) $value; }
         else { $valid = array_column($column['options'], 'id'); if (!in_array((int) $value, array_map('intval', $valid), true)) respond(422, ['error' => "Selecione uma opção válida para {$column['name']}."]); $table = 'c_dois_valores'; $value = (int) $value; }
+        if (!$column['allow_duplicates']) {
+            $duplicate = $db->prepare("SELECT EXISTS(SELECT 1 FROM $table values_table JOIN registros_do_crud r ON r.id = values_table.id_registro WHERE values_table.id_coluna = ? AND values_table.valor_da_coluna = ? AND r.id_crud = ? AND r.id <> ?)");
+            $duplicate->execute([$column['id'], $value, $crudId, $recordId]);
+            if ((int) $duplicate->fetchColumn()) respond(409, ['error' => "Não foi possível salvar o registro: a coluna '{$column['name']}' não aceita valores repetidos."]);
+        }
         $statement = $db->prepare("INSERT INTO $table (id_registro, id_coluna, valor_da_coluna) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE valor_da_coluna = VALUES(valor_da_coluna)");
         $statement->execute([$recordId, $column['id'], $value]);
     }
@@ -155,24 +160,31 @@ try {
     }
     if ($entity === 'columns' && $method === 'GET') { $item = crud($db, $crudId); $item['orientation'] = (int) $item['orientation']; $item['type'] = (int) $item['type']; $item['columns'] = columns($db, $crudId); respond(200, ['crud' => $item]); }
     if ($entity === 'records' && $method === 'GET') { $item = crud($db, $crudId); $item['orientation'] = (int) $item['orientation']; $item['type'] = (int) $item['type']; $item['columns'] = columns($db, $crudId); $item['records'] = records($db, $crudId); respond(200, ['crud' => $item]); }
-    if ($entity === 'columns' && $method === 'POST') { if ((int) crud($db, $crudId)['type'] === 1) respond(422, ['error' => 'CRUDs de CRUDs não possuem colunas.']); $data = input(); $name = trim((string) ($data['name'] ?? '')); $type = $data['type'] ?? null; $position = $data['position'] ?? 0; if ($name === '' || !in_array($type, [0, 1, 2], true) || filter_var($position, FILTER_VALIDATE_INT) === false) respond(422, ['error' => 'Dados da coluna inválidos.']); $db->beginTransaction(); $db->prepare('INSERT INTO colunas (nome_da_coluna, tipo, ordem) VALUES (?, ?, ?)')->execute([$name, $type, $position]); $columnId = (int) $db->lastInsertId(); $db->prepare('INSERT INTO cruds_colunas (id_crud, id_coluna) VALUES (?, ?)')->execute([$crudId, $columnId]); $db->commit(); respond(201, ['column' => ['id' => $columnId, 'name' => $name, 'type' => $type, 'position' => (int) $position, 'options' => []]]); }
+    if ($entity === 'columns' && $method === 'POST') { if ((int) crud($db, $crudId)['type'] === 1) respond(422, ['error' => 'CRUDs de CRUDs não possuem colunas.']); $data = input(); $name = trim((string) ($data['name'] ?? '')); $type = $data['type'] ?? null; $position = $data['position'] ?? 0; $allowDuplicates = $data['allow_duplicates'] ?? true; if ($name === '' || !in_array($type, [0, 1, 2], true) || filter_var($position, FILTER_VALIDATE_INT) === false || !is_bool($allowDuplicates)) respond(422, ['error' => 'Dados da coluna inválidos.']); $db->beginTransaction(); $db->prepare('INSERT INTO colunas (nome_da_coluna, tipo, ordem, aceita_valor_igual) VALUES (?, ?, ?, ?)')->execute([$name, $type, $position, (int) $allowDuplicates]); $columnId = (int) $db->lastInsertId(); $db->prepare('INSERT INTO cruds_colunas (id_crud, id_coluna) VALUES (?, ?)')->execute([$crudId, $columnId]); $db->commit(); respond(201, ['column' => ['id' => $columnId, 'name' => $name, 'type' => $type, 'position' => (int) $position, 'allow_duplicates' => $allowDuplicates, 'options' => []]]); }
     if ($entity === 'columns' && isset($parts[3]) && $method === 'PATCH') {
         $columnId = filter_var($parts[3], FILTER_VALIDATE_INT); crud($db, $crudId);
-        $belongs = $db->prepare('SELECT c.id, c.tipo FROM colunas c JOIN cruds_colunas cc ON cc.id_coluna = c.id WHERE cc.id_crud = ? AND c.id = ?');
+        $belongs = $db->prepare('SELECT c.id, c.tipo, c.aceita_valor_igual FROM colunas c JOIN cruds_colunas cc ON cc.id_coluna = c.id WHERE cc.id_crud = ? AND c.id = ?');
         $belongs->execute([$crudId, $columnId]); $current = $belongs->fetch(PDO::FETCH_ASSOC);
         if (!$current) respond(404, ['error' => 'Coluna não encontrada neste CRUD.']);
-        $data = input(); $name = trim((string) ($data['name'] ?? '')); $type = $data['type'] ?? null; $position = $data['position'] ?? null;
-        if ($name === '' || !in_array($type, [0, 1, 2], true) || filter_var($position, FILTER_VALIDATE_INT) === false) respond(422, ['error' => 'Dados da coluna inválidos.']);
+        $data = input(); $name = trim((string) ($data['name'] ?? '')); $type = $data['type'] ?? null; $position = $data['position'] ?? null; $allowDuplicates = $data['allow_duplicates'] ?? null;
+        if ($name === '' || !in_array($type, [0, 1, 2], true) || filter_var($position, FILTER_VALIDATE_INT) === false || !is_bool($allowDuplicates)) respond(422, ['error' => 'Dados da coluna inválidos.']);
         $used = $db->prepare('SELECT EXISTS(SELECT 1 FROM c_zero_valores WHERE id_coluna = ?) OR EXISTS(SELECT 1 FROM c_um_valores WHERE id_coluna = ?) OR EXISTS(SELECT 1 FROM c_dois_valores WHERE id_coluna = ?)');
         $used->execute([$columnId, $columnId, $columnId]);
         if ((int) $used->fetchColumn() && (int) $current['tipo'] !== (int) $type) respond(409, ['error' => 'Não é possível alterar o tipo de uma coluna que já possui valores.']);
+        if (!$allowDuplicates && (bool) $current['aceita_valor_igual']) {
+            $tables = ['c_zero_valores', 'c_um_valores', 'c_dois_valores'];
+            $valueTable = $tables[(int) $type];
+            $duplicates = $db->prepare("SELECT EXISTS(SELECT 1 FROM $valueTable first_value JOIN $valueTable second_value ON first_value.id_coluna = second_value.id_coluna AND first_value.valor_da_coluna = second_value.valor_da_coluna AND first_value.id < second_value.id WHERE first_value.id_coluna = ?)");
+            $duplicates->execute([$columnId]);
+            if ((int) $duplicates->fetchColumn()) respond(409, ['error' => 'Não é possível exigir valor único: esta coluna já possui valores repetidos.']);
+        }
         $db->beginTransaction();
-        $db->prepare('UPDATE colunas SET nome_da_coluna = ?, tipo = ?, ordem = ? WHERE id = ?')->execute([$name, $type, $position, $columnId]);
+        $db->prepare('UPDATE colunas SET nome_da_coluna = ?, tipo = ?, ordem = ?, aceita_valor_igual = ? WHERE id = ?')->execute([$name, $type, $position, (int) $allowDuplicates, $columnId]);
         $db->commit(); respond(200, ['column' => columns($db, $crudId)]);
     }
     if ($entity === 'columns' && isset($parts[3]) && $method === 'DELETE') { $columnId = (int) $parts[3]; crud($db, $crudId); $db->prepare('DELETE FROM cruds_colunas WHERE id_crud = ? AND id_coluna = ?')->execute([$crudId, $columnId]); respond(204, []); }
-    if ($entity === 'records' && $method === 'POST') { if ((int) crud($db, $crudId)['type'] === 1) respond(422, ['error' => 'CRUDs de CRUDs não possuem registros.']); $db->beginTransaction(); $db->prepare('INSERT INTO registros_do_crud (id_crud) VALUES (?)')->execute([$crudId]); $recordId = (int) $db->lastInsertId(); saveValues($db, $recordId, columns($db, $crudId), input()['values'] ?? []); $db->commit(); respond(201, ['id' => $recordId]); }
-    if ($entity === 'records' && isset($parts[3]) && $method === 'PATCH') { $recordId = (int) $parts[3]; $check = $db->prepare('SELECT id FROM registros_do_crud WHERE id = ? AND id_crud = ?'); $check->execute([$recordId, $crudId]); if (!$check->fetch()) respond(404, ['error' => 'Registro não encontrado.']); $db->beginTransaction(); saveValues($db, $recordId, columns($db, $crudId), input()['values'] ?? []); $db->commit(); respond(200, ['id' => $recordId]); }
+    if ($entity === 'records' && $method === 'POST') { if ((int) crud($db, $crudId)['type'] === 1) respond(422, ['error' => 'CRUDs de CRUDs não possuem registros.']); $db->beginTransaction(); $db->prepare('INSERT INTO registros_do_crud (id_crud) VALUES (?)')->execute([$crudId]); $recordId = (int) $db->lastInsertId(); saveValues($db, $crudId, $recordId, columns($db, $crudId), input()['values'] ?? []); $db->commit(); respond(201, ['id' => $recordId]); }
+    if ($entity === 'records' && isset($parts[3]) && $method === 'PATCH') { $recordId = (int) $parts[3]; $check = $db->prepare('SELECT id FROM registros_do_crud WHERE id = ? AND id_crud = ?'); $check->execute([$recordId, $crudId]); if (!$check->fetch()) respond(404, ['error' => 'Registro não encontrado.']); $db->beginTransaction(); saveValues($db, $crudId, $recordId, columns($db, $crudId), input()['values'] ?? []); $db->commit(); respond(200, ['id' => $recordId]); }
     if ($entity === 'records' && isset($parts[3]) && $method === 'DELETE') { $db->prepare('DELETE FROM registros_do_crud WHERE id = ? AND id_crud = ?')->execute([(int) $parts[3], $crudId]); respond(204, []); }
     respond(405, ['error' => 'Método não permitido.']);
 } catch (Throwable $error) {
