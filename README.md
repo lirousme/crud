@@ -6,7 +6,7 @@
 
 1. Copie o arquivo de exemplo: `cp .env.example .env`.
 2. Preencha no arquivo `.env` as credenciais de acesso ao banco de dados MySQL.
-3. Execute o script [`database/schema.sql`](database/schema.sql) no MySQL.
+3. Execute o script [`database/schema.sql`](database/schema.sql) no MySQL. Em bancos já existentes, aplique também a migration [`database/migrations/001-add-column-unique-setting.sql`](database/migrations/001-add-column-unique-setting.sql).
 4. Inicie a aplicação com `php -S localhost:8000` e abra `http://localhost:8000`.
 
 O arquivo `.env` está incluído no `.gitignore` e **não deve ser versionado**. As credenciais de acesso ao banco de dados MySQL devem ficar exclusivamente nele.
@@ -47,7 +47,7 @@ Em servidores Apache/cPanel, o arquivo [`.htaccess`](.htaccess) aplica os mesmos
 - `cruds`: `id`, `nome_do_crud`, `orientacao_colunas` (`INT`, padrão `0`) e `type` (`INT`, padrão `0`). O tipo `0` é um CRUD simples; o tipo `1` é um CRUD de CRUDs. A orientação `0` mantém as colunas na horizontal e os registros na vertical; a orientação `1` deixa as colunas na vertical e os registros na horizontal.
 - `cruds_de_cruds`: `id`, `id_crud_father` e `id_crud_son`; relaciona um CRUD de CRUDs aos CRUDs internos.
 - `registros_do_crud`: `id` e `id_crud`.
-- `colunas`: `id`, `nome_da_coluna`, `tipo` (`INT`, padrão `0`) e `ordem` (`INT`).
+- `colunas`: `id`, `nome_da_coluna`, `tipo` (`INT`, padrão `0`), `ordem` (`INT`) e `aceita_valor_igual` (`TINYINT`, padrão `1`). Quando esse último campo é `0`, os valores preenchidos devem ser únicos na coluna.
 - `cruds_colunas`: `id`, `id_crud` e `id_coluna`; permite que uma mesma coluna pertença a mais de um CRUD.
 - `c_zero_valores`: `id`, `id_registro` e `valor_da_coluna` (`TEXT`).
 - `c_um_valores`: `id`, `id_registro` e `valor_da_coluna` (`INT`).
@@ -62,7 +62,7 @@ Os valores das colunas do tipo `0` são texto, das colunas do tipo `1` são num�
 
 Abra a aplicação pelo servidor PHP. A interface usa Tailwind CSS em modo escuro e consulta o MySQL de verdade: antes de carregar a lista ela verifica a conexão em uma rota própria, sem cache. O status de conexão, os contadores e a lista vêm do banco. Um novo CRUD só é exibido depois de ser inserido na tabela `cruds`; quando o banco estiver indisponível, a interface informa isso e não exibe dados de demonstração.
 
-Cada card de CRUD simples oferece dois acessos: **Abrir registros**, para adicionar, editar e remover registros, e **Colunas**, para administrar a estrutura de colunas separadamente. Um card do tipo **CRUD de CRUDs** abre a lista dos seus CRUDs internos; nessa lista é possível criar CRUDs simples ou novos CRUDs de CRUDs, em qualquer nível de aninhamento. Colunas de seleção (tipo `2`) têm um acesso **Opções** próprio: nele é possível adicionar, editar e remover as opções, sem incluí-las no formulário da estrutura. Ao editar um registro, deixar um campo em branco remove o valor correspondente do banco de dados.
+Cada card de CRUD simples oferece dois acessos: **Abrir registros**, para adicionar, editar e remover registros, e **Colunas**, para administrar a estrutura de colunas separadamente. Um card do tipo **CRUD de CRUDs** abre a lista dos seus CRUDs internos; nessa lista é possível criar CRUDs simples ou novos CRUDs de CRUDs, em qualquer nível de aninhamento. Colunas de seleção (tipo `2`) têm um acesso **Opções** próprio: nele é possível adicionar, editar e remover as opções, sem incluí-las no formulário da estrutura. Ao criar ou editar uma coluna, o switch **Permitir valores repetidos** define se ela pode receber valores iguais. Para colunas configuradas como valor único, a API impede duplicidades e o formulário de registro mostra um modal explicando a rejeição. Ao editar um registro, deixar um campo em branco remove o valor correspondente do banco de dados.
 
 ### Tabela de registros
 
