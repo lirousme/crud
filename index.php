@@ -46,10 +46,10 @@ $appVersion = hash_file('sha256', __DIR__ . '/app.js');
           <div class="mb-7 grid gap-4 sm:grid-cols-3"><div class="rounded-xl border border-line bg-panel p-4"><p class="text-xs font-medium uppercase tracking-wider text-slate-500">CRUDs ativos</p><p id="crudCount" class="mt-2 text-2xl font-bold text-white">0</p></div><div class="rounded-xl border border-line bg-panel p-4"><p class="text-xs font-medium uppercase tracking-wider text-slate-500">Registros totais</p><p id="recordCount" class="mt-2 text-2xl font-bold text-white">0</p></div><div class="rounded-xl border border-line bg-panel p-4"><p class="text-xs font-medium uppercase tracking-wider text-slate-500">Colunas compartilhadas</p><p id="columnCount" class="mt-2 text-2xl font-bold text-white">0</p></div></div>
           <div id="crudList" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3"></div>
         </section>
-        <section id="recordsDetail" class="hidden min-w-full w-max p-5 pb-12 md:p-9 md:pb-14">
+        <section id="recordsDetail" class="hidden min-w-0 p-5 pb-12 md:p-9 md:pb-14">
           <button id="backToDashboard" class="mb-6 text-sm font-medium text-violet-300 hover:text-violet-200">← Voltar para meus CRUDs</button>
           <div class="mb-7 flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p class="text-xs text-slate-500">Registros do CRUD</p><h2 id="recordsTitle" class="mt-1 text-2xl font-bold text-white"></h2><p id="recordsDescription" class="mt-1 text-sm text-slate-500"></p></div><div class="flex gap-3"><button id="openStructureFromRecords" class="rounded-lg border border-line px-4 py-2.5 text-sm font-semibold text-violet-200 hover:bg-violet/10">Gerenciar colunas</button><button id="newRecord" class="rounded-lg bg-violet px-4 py-2.5 text-sm font-semibold text-white">+ Novo registro</button></div></div>
-          <div class="w-max min-w-full rounded-xl border border-line bg-panel"><table id="recordsTable" class="min-w-full border-collapse"></table></div>
+          <div class="max-w-full overflow-x-auto rounded-xl border border-line bg-panel"><table id="recordsTable" class="min-w-full border-collapse"></table></div>
         </section>
         <section id="structureDetail" class="hidden mx-auto max-w-7xl p-5 md:p-9">
           <button class="backToDashboard mb-6 text-sm font-medium text-violet-300 hover:text-violet-200">← Voltar para meus CRUDs</button>
